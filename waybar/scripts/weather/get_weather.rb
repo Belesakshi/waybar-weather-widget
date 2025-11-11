@@ -17,13 +17,16 @@ require 'cgi'
 require 'fileutils'
 
 # ─── Constants ──────────────────────────────────────────────────────────────
-ICON_SIZE = '14000' # pango units; ~14pt
-ICON_SIZE_LG = '18000'
-ICON_SIZE_SM = '12000'
 SEASONAL_BIAS = ENV.fetch('SEASONAL_BIAS', '1') == '1'
 POP_ALERT_THRESHOLD = 60
 
 ICON = {
+  SIZE: {
+    DEFAULT: '14000',
+    SMALL: '12000',
+    LARGE: '18000'
+  },
+
   THERMOMETER: {
     COLD: '',
     NEUTRAL: '',
@@ -258,7 +261,7 @@ def map_condition_icon(icon_map, code, is_day)
   ''
 end
 
-def style_icon(glyph, color = THEME['primary'], size = ICON_SIZE)
+def style_icon(glyph, color = THEME['primary'], size = ICON[:SIZE][:DEFAULT])
   "<span foreground='#{color}' size='#{size}'>#{glyph} </span>"
 end
 
@@ -493,7 +496,7 @@ def make_hour_table(next_hours, unit, precip_unit, icon_map)
     precip_col = format('%<val>.1f %<unit>s', val: h['precip'], unit: precip_unit).rjust(7)
 
     glyph = map_condition_icon(icon_map, h['code'], h['is_day'] != 0)
-    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON_SIZE_SM)
+    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON[:SIZE][:SMALL])
     cond_cell = "#{icon_html} #{CGI.escapeHTML(h['cond'].to_s)}".strip
 
     rows << format('%-4s │ %s │ %s │ %s │ %s',
@@ -527,7 +530,7 @@ def make_day_table(days, unit, precip_unit, icon_map)
 
     cond_txt = d['cond'].to_s
     glyph = map_condition_icon(icon_map, d['code'], true)
-    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON_SIZE_SM)
+    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON[:SIZE][:SMALL])
     cond_cell = "#{icon_html} #{CGI.escapeHTML(cond_txt)}".strip
 
     row = format('%-9s │ %s │ %s │ %s │ %s │ %s',
@@ -555,7 +558,7 @@ def make_3h_table(rows, unit, precip_unit, icon_map)
     precip_col = format('%<val>.1f %<unit>s', val: r['precip'], unit: precip_unit).rjust(7)
 
     glyph = map_condition_icon(icon_map, r['code'], r['is_day'] != 0)
-    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON_SIZE_SM)
+    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON[:SIZE][:SMALL])
     cond_cell = "#{icon_html} #{CGI.escapeHTML(r['cond'].to_s)}".strip
 
     out << format('%-9s │ %2s │ %s │ %s │ %s │ %s',
@@ -621,9 +624,9 @@ def build_week_view_tooltip(timezone:, cond:, temp:, feels:, unit:, icon_map:, c
   )
 
   astro_table = make_astro3d_table(three_hour_rows, astro_by_date || {})
-  astro_header = "<b>#{style_icon(ICON[:SUN][:RISE], THEME['primary'], ICON_SIZE_SM)} Week Sunrise / Sunset</b>"
+  astro_header = "<b>#{style_icon(ICON[:SUN][:RISE], THEME['primary'], ICON[:SIZE][:SMALL])} Week Sunrise / Sunset</b>"
 
-  detail_header = "<b>#{style_icon('󰨳', THEME['primary'], ICON_SIZE_SM)} Week Details</b>"
+  detail_header = "<b>#{style_icon('󰨳', THEME['primary'], ICON[:SIZE][:SMALL])} Week Details</b>"
   detail_table = make_3h_table(three_hour_rows, unit, precip_unit, icon_map)
 
   "#{header_block}\n#{astro_header}\n\n#{astro_table}\n\n#{divider}\n\n#{detail_header}\n\n#{detail_table}"
@@ -636,7 +639,7 @@ def build_text_and_tooltip(timezone:, cond:, temp:, feels:, precip_amt:, code:, 
   cond_icon_raw = map_condition_icon(icon_map, code, is_day != 0) || fallback_icon
 
   # main text with waybar icon
-  waybar_icon = style_icon(cond_icon_raw, THEME['primary'], ICON_SIZE_SM)
+  waybar_icon = style_icon(cond_icon_raw, THEME['primary'], ICON[:SIZE][:SMALL])
   left = "#{waybar_icon}#{temp.round}#{unit}"
   right = "#{temp.round}#{unit} #{waybar_icon}"
   text = (icon_pos || 'left') == 'left' ? left : right
@@ -654,10 +657,10 @@ def build_text_and_tooltip(timezone:, cond:, temp:, feels:, precip_amt:, code:, 
   )
 
   tooltip = "#{header_block}\n" \
-            "<b>#{style_icon('', THEME['primary'], ICON_SIZE_SM)} Next #{next_hours.length} hours</b>\n\n" \
+            "<b>#{style_icon('', THEME['primary'], ICON[:SIZE][:SMALL])} Next #{next_hours.length} hours</b>\n\n" \
             "#{next_hours_table}\n\n#{divider}\n\n" \
             "<b>#{style_icon('󰨳', THEME['primary'],
-                             ICON_SIZE_SM)} Next #{forecast_days} Days</b>\n\n#{next_days_overview_table}"
+                             ICON[:SIZE][:SMALL])} Next #{forecast_days} Days</b>\n\n#{next_days_overview_table}"
   [text, tooltip]
 end
 
