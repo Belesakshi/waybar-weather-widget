@@ -19,14 +19,10 @@ require 'fileutils'
 # ─── Constants ──────────────────────────────────────────────────────────────
 SEASONAL_BIAS = ENV.fetch('SEASONAL_BIAS', '1') == '1'
 POP_ALERT_THRESHOLD = 60
+DIVIDER_CHAR = '─'
+DIVIDER_LEN = 74
 
 ICON = {
-  SIZE: {
-    DEFAULT: '14000',
-    SMALL: '12000',
-    LARGE: '18000'
-  },
-
   THERMOMETER: {
     COLD: '',
     NEUTRAL: '',
@@ -44,22 +40,6 @@ ICON = {
     HIGH: ''
   }
 }.freeze
-
-THEME = {
-  'primary' => '#42A5F5',
-  'cold' => 'skyblue',
-  'neutral' => '#42A5F5',
-  'warm' => 'khaki',
-  'hot' => 'indianred',
-  'pop_low' => '#EAD7FF',
-  'pop_med' => '#CFA7FF',
-  'pop_high' => '#BC85FF',
-  'pop_vhigh' => '#A855F7',
-  'divider' => '#2B3B57'
-}
-
-DIVIDER_CHAR = '─'
-DIVIDER_LEN = 74
 
 HOUR_TABLE_HEADER_TEXT = format('%-4s │ %5s │ %4s │ %7s │ Cond', 'Hr', 'Temp', 'PoP', 'Precip')
 DAY_TABLE_HEADER_TEXT = format('%-9s │ %5s │ %5s │ %4s │ %7s │ Cond', 'Day', 'Hi', 'Lo', 'PoP', 'Precip')
@@ -98,6 +78,88 @@ WMO_CODE_DESCRIPTIONS = {
   99 => 'Thunderstorm with heavy hail'
 }.freeze
 
+# ─── Classes ────────────────────────────────────────────────────────────────
+module Config
+  @settings = {
+    colors: {
+      'primary' => '#42A5F5',
+      'cold' => 'skyblue',
+      'neutral' => '#42A5F5',
+      'warm' => 'khaki',
+      'hot' => 'indianred',
+      'pop_low' => '#EAD7FF',
+      'pop_med' => '#CFA7FF',
+      'pop_high' => '#BC85FF',
+      'pop_vhigh' => '#A855F7',
+      'divider' => '#2B3B57'
+    },
+    icon_type: 'nerd_font', # 'nerd_font' | 'emoji'
+    icon_position: 'left', # 'left' | 'right'
+    font_size: 14, # in px
+    unit: 'Celsius', # 'Celsius' | 'Fahrenheit'
+    hours_ahead: 24, # max 24
+    forecast_days: 10, # max 16
+    pongo_size: {}
+  }
+
+  SETTING_KEY_MAP = {
+    'icon_type' => :icon_type,
+    'icon_position' => :icon_position,
+    'font_size' => :font_size,
+    'unit' => :unit,
+    'hours_ahead' => :hours_ahead,
+    'forecast_days' => :forecast_days
+  }.freeze
+
+  def self.settings
+    @settings
+  end
+
+  def self.merge_user_config(user_config)
+    # Merge colors settings
+    @settings[:colors].merge!(user_config['colors']) if user_config.key?('colors') && user_config['colors'].is_a?(Hash)
+
+    # Handle font size calculations
+    self.set_font_size = user_config['font_size'] if user_config.key?('font_size')
+
+    # Merge other settings
+    SETTING_KEY_MAP.each do |config_key, settings_key|
+      @settings[settings_key] = user_config[config_key] if user_config.key?(config_key)
+    end
+  end
+
+  def self.colors
+    @settings[:colors]
+  end
+
+  def self.pongo_size
+    @settings[:pongo_size]
+  end
+
+  def self.icon_set
+    @settings[:icon_type]
+  end
+
+  def self.set_color(key, value)
+    @settings[:colors][key] = value
+  end
+
+  def self.set_font_size=(value)
+    @settings[:font_size] = value
+    update_pongo_sizes
+  end
+
+  private_class_method def self.update_pongo_sizes
+    current_size = @settings[:font_size]
+    @settings[:pongo_size] = {
+      small: (current_size - 2) * 1000,
+      medium: current_size * 1000,
+      large: (current_size + 4) * 1000
+    }
+  end
+  update_pongo_sizes
+end
+
 # ─── Utilities ──────────────────────────────────────────────────────────────
 def safe(hash, key, default = nil)
   hash.key?(key) ? hash[key] : default
@@ -110,7 +172,7 @@ def load_json(path)
   JSON.parse(content_no_comments)
 end
 
-def divider(length = DIVIDER_LEN, char = DIVIDER_CHAR, color = THEME['divider'])
+def divider(length = DIVIDER_LEN, char = DIVIDER_CHAR, color = Config.colors['divider'])
   line = char * [1, length].max
   "<span font_family='monospace' foreground='#{color}'>#{line}</span>"
 end
@@ -156,18 +218,18 @@ def thermo_bands(unit)
   if celsius_unit?(unit)
     cold = SEASONAL_BIAS ? seasonal_cold_limit_c : 5
     [
-      [cold, ICON[:THERMOMETER][:COLD],    THEME['cold']],
-      [20,  ICON[:THERMOMETER][:NEUTRAL],  THEME['neutral']],
-      [28,  ICON[:THERMOMETER][:WARM],     THEME['warm']],
-      [Float::INFINITY, ICON[:THERMOMETER][:HOT], THEME['hot']]
+      [cold, ICON[:THERMOMETER][:COLD],    Config.colors['cold']],
+      [20,  ICON[:THERMOMETER][:NEUTRAL],  Config.colors['neutral']],
+      [28,  ICON[:THERMOMETER][:WARM],     Config.colors['warm']],
+      [Float::INFINITY, ICON[:THERMOMETER][:HOT], Config.colors['hot']]
     ]
   else
     cold = SEASONAL_BIAS ? seasonal_cold_limit_f : 41
     [
-      [cold, ICON[:THERMOMETER][:COLD],    THEME['cold']],
-      [68,  ICON[:THERMOMETER][:NEUTRAL],  THEME['neutral']],
-      [82,  ICON[:THERMOMETER][:WARM],     THEME['warm']],
-      [Float::INFINITY, ICON[:THERMOMETER][:HOT], THEME['hot']]
+      [cold, ICON[:THERMOMETER][:COLD],    Config.colors['cold']],
+      [68,  ICON[:THERMOMETER][:NEUTRAL],  Config.colors['neutral']],
+      [82,  ICON[:THERMOMETER][:WARM],     Config.colors['warm']],
+      [Float::INFINITY, ICON[:THERMOMETER][:HOT], Config.colors['hot']]
     ]
   end
 end
@@ -188,11 +250,11 @@ end
 
 def pop_color(pop)
   pop = [[0, pop.to_i].max, 100].min
-  return THEME['pop_low'] if pop < 30    # 0–29
-  return THEME['pop_med'] if pop < 60    # 30–59
-  return THEME['pop_high'] if pop < 80   # 60–79
+  return Config.colors['pop_low'] if pop < 30    # 0–29
+  return Config.colors['pop_med'] if pop < 60    # 30–59
+  return Config.colors['pop_high'] if pop < 80   # 60–79
 
-  THEME['pop_vhigh'] # 80–100
+  Config.colors['pop_vhigh'] # 80–100
 end
 
 def icon_for_pop(pop)
@@ -261,7 +323,7 @@ def map_condition_icon(icon_map, code, is_day)
   ''
 end
 
-def style_icon(glyph, color = THEME['primary'], size = ICON[:SIZE][:DEFAULT])
+def style_icon(glyph, color = Config.colors['primary'], size = Config.pongo_size[:medium])
   "<span foreground='#{color}' size='#{size}'>#{glyph} </span>"
 end
 
@@ -496,7 +558,7 @@ def make_hour_table(next_hours, unit, precip_unit, icon_map)
     precip_col = format('%<val>.1f %<unit>s', val: h['precip'], unit: precip_unit).rjust(7)
 
     glyph = map_condition_icon(icon_map, h['code'], h['is_day'] != 0)
-    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON[:SIZE][:SMALL])
+    icon_html = glyph.empty? ? '' : style_icon(glyph, Config.colors['primary'], Config.pongo_size[:small])
     cond_cell = "#{icon_html} #{CGI.escapeHTML(h['cond'].to_s)}".strip
 
     rows << format('%-4s │ %s │ %s │ %s │ %s',
@@ -530,7 +592,7 @@ def make_day_table(days, unit, precip_unit, icon_map)
 
     cond_txt = d['cond'].to_s
     glyph = map_condition_icon(icon_map, d['code'], true)
-    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON[:SIZE][:SMALL])
+    icon_html = glyph.empty? ? '' : style_icon(glyph, Config.colors['primary'], Config.pongo_size[:small])
     cond_cell = "#{icon_html} #{CGI.escapeHTML(cond_txt)}".strip
 
     row = format('%-9s │ %s │ %s │ %s │ %s │ %s',
@@ -558,7 +620,7 @@ def make_3h_table(rows, unit, precip_unit, icon_map)
     precip_col = format('%<val>.1f %<unit>s', val: r['precip'], unit: precip_unit).rjust(7)
 
     glyph = map_condition_icon(icon_map, r['code'], r['is_day'] != 0)
-    icon_html = glyph.empty? ? '' : style_icon(glyph, THEME['primary'], ICON[:SIZE][:SMALL])
+    icon_html = glyph.empty? ? '' : style_icon(glyph, Config.colors['primary'], Config.pongo_size[:small])
     cond_cell = "#{icon_html} #{CGI.escapeHTML(r['cond'].to_s)}".strip
 
     out << format('%-9s │ %2s │ %s │ %s │ %s │ %s',
@@ -624,9 +686,10 @@ def build_week_view_tooltip(timezone:, cond:, temp:, feels:, unit:, icon_map:, c
   )
 
   astro_table = make_astro3d_table(three_hour_rows, astro_by_date || {})
-  astro_header = "<b>#{style_icon(ICON[:SUN][:RISE], THEME['primary'], ICON[:SIZE][:SMALL])} Week Sunrise / Sunset</b>"
+  astro_header = "<b>#{style_icon(ICON[:SUN][:RISE], Config.colors['primary'],
+                                  Config.pongo_size[:small])} Week Sunrise / Sunset</b>"
 
-  detail_header = "<b>#{style_icon('󰨳', THEME['primary'], ICON[:SIZE][:SMALL])} Week Details</b>"
+  detail_header = "<b>#{style_icon('󰨳', Config.colors['primary'], Config.pongo_size[:small])} Week Details</b>"
   detail_table = make_3h_table(three_hour_rows, unit, precip_unit, icon_map)
 
   "#{header_block}\n#{astro_header}\n\n#{astro_table}\n\n#{divider}\n\n#{detail_header}\n\n#{detail_table}"
@@ -639,7 +702,7 @@ def build_text_and_tooltip(timezone:, cond:, temp:, feels:, precip_amt:, code:, 
   cond_icon_raw = map_condition_icon(icon_map, code, is_day != 0) || fallback_icon
 
   # main text with waybar icon
-  waybar_icon = style_icon(cond_icon_raw, THEME['primary'], ICON[:SIZE][:SMALL])
+  waybar_icon = style_icon(cond_icon_raw, Config.colors['primary'], Config.pongo_size[:small])
   left = "#{waybar_icon}#{temp.round}#{unit}"
   right = "#{temp.round}#{unit} #{waybar_icon}"
   text = (icon_pos || 'left') == 'left' ? left : right
@@ -657,10 +720,11 @@ def build_text_and_tooltip(timezone:, cond:, temp:, feels:, precip_amt:, code:, 
   )
 
   tooltip = "#{header_block}\n" \
-            "<b>#{style_icon('', THEME['primary'], ICON[:SIZE][:SMALL])} Next #{next_hours.length} hours</b>\n\n" \
+            "<b>#{style_icon('', Config.colors['primary'],
+                             Config.pongo_size[:small])} Next #{next_hours.length} hours</b>\n\n" \
             "#{next_hours_table}\n\n#{divider}\n\n" \
-            "<b>#{style_icon('󰨳', THEME['primary'],
-                             ICON[:SIZE][:SMALL])} Next #{forecast_days} Days</b>\n\n#{next_days_overview_table}"
+            "<b>#{style_icon('󰨳', Config.colors['primary'],
+                             Config.pongo_size[:small])} Next #{forecast_days} Days</b>\n\n#{next_days_overview_table}"
   [text, tooltip]
 end
 
@@ -687,18 +751,14 @@ def main
     cfg = load_config(script_path)
     mode = get_mode
 
-    # Load theme settings
-    safe(cfg, 'theme', {})
-
-    # Load theme settings
-    theme_cfg = safe(cfg, 'theme', {})
-    THEME.merge!(theme_cfg) # Update global THEME with config values
+    # merge_user_config Config with loaded config
+    Config.merge_user_config(cfg)
 
     # Parse config
-    unit_c = safe(cfg, 'unit', 'Celsius') == 'Celsius'
-    hours_ahead = (safe(cfg, 'hours_ahead', 24) || 24).to_i
-    forecast_days = (safe(cfg, 'forecast_days', 16) || 16).to_i
-    icon_pos = (safe(cfg, 'icon-position', 'left') || 'left').to_s
+    unit_c = Config.settings[:unit] == 'Celsius'
+    hours_ahead = (Config.settings[:hours_ahead] || 24).to_i
+    forecast_days = (Config.settings[:forecast_days] || 16).to_i
+    icon_pos = (Config.settings[:icon_position] || 'left').to_s
     unit = unit_c ? '°C' : '°F'
     precip_unit = unit_c ? 'mm' : 'in'
 
