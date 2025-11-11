@@ -21,17 +21,26 @@ ICON_SIZE = '14000' # pango units; ~14pt
 ICON_SIZE_LG = '18000'
 ICON_SIZE_SM = '12000'
 SEASONAL_BIAS = ENV.fetch('SEASONAL_BIAS', '1') == '1'
-
 POP_ALERT_THRESHOLD = 60
-POP_ICON_HIGH = ''
-POP_ICON_LOW  = ''
-SUNRISE_ICON  = ''
-SUNSET_ICON   = '󰖚'
 
-THERMO_COLD    = ''
-THERMO_NEUTRAL = ''
-THERMO_WARM    = ''
-THERMO_HOT     = ''
+ICON = {
+  THERMOMETER: {
+    COLD: '',
+    NEUTRAL: '',
+    WARM: '',
+    HOT: ''
+  },
+
+  SUN: {
+    RISE: '',
+    SET: '󰖚'
+  },
+
+  PRECIPITATION: {
+    LOW: '',
+    HIGH: ''
+  }
+}.freeze
 
 THEME = {
   'primary' => '#42A5F5',
@@ -144,18 +153,18 @@ def thermo_bands(unit)
   if celsius_unit?(unit)
     cold = SEASONAL_BIAS ? seasonal_cold_limit_c : 5
     [
-      [cold, THERMO_COLD,    THEME['cold']],
-      [20,  THERMO_NEUTRAL,  THEME['neutral']],
-      [28,  THERMO_WARM,     THEME['warm']],
-      [Float::INFINITY, THERMO_HOT, THEME['hot']]
+      [cold, ICON[:THERMOMETER][:COLD],    THEME['cold']],
+      [20,  ICON[:THERMOMETER][:NEUTRAL],  THEME['neutral']],
+      [28,  ICON[:THERMOMETER][:WARM],     THEME['warm']],
+      [Float::INFINITY, ICON[:THERMOMETER][:HOT], THEME['hot']]
     ]
   else
     cold = SEASONAL_BIAS ? seasonal_cold_limit_f : 41
     [
-      [cold, THERMO_COLD,    THEME['cold']],
-      [68,  THERMO_NEUTRAL,  THEME['neutral']],
-      [82,  THERMO_WARM,     THEME['warm']],
-      [Float::INFINITY, THERMO_HOT, THEME['hot']]
+      [cold, ICON[:THERMOMETER][:COLD],    THEME['cold']],
+      [68,  ICON[:THERMOMETER][:NEUTRAL],  THEME['neutral']],
+      [82,  ICON[:THERMOMETER][:WARM],     THEME['warm']],
+      [Float::INFINITY, ICON[:THERMOMETER][:HOT], THEME['hot']]
     ]
   end
 end
@@ -184,7 +193,7 @@ def pop_color(pop)
 end
 
 def icon_for_pop(pop)
-  pop >= POP_ALERT_THRESHOLD ? POP_ICON_HIGH : POP_ICON_LOW
+  pop >= POP_ALERT_THRESHOLD ? ICON[:PRECIPITATION][:HIGH] : ICON[:PRECIPITATION][:LOW]
 end
 
 def wmo_code_description(code)
@@ -579,9 +588,9 @@ def build_header_block(timezone:, cond:, temp:, feels:, unit:, icon_map:, code:,
   astro_line = ''
   if sunrise || sunset
     astro_line = format('%s Sunrise %s | %s Sunset %s',
-                        style_icon(SUNRISE_ICON),
+                        style_icon(ICON[:SUN][:RISE]),
                         CGI.escapeHTML(sunrise || '—'),
-                        style_icon(SUNSET_ICON),
+                        style_icon(ICON[:SUN][:SET]),
                         CGI.escapeHTML(sunset || '—'))
   end
 
@@ -612,7 +621,7 @@ def build_week_view_tooltip(timezone:, cond:, temp:, feels:, unit:, icon_map:, c
   )
 
   astro_table = make_astro3d_table(three_hour_rows, astro_by_date || {})
-  astro_header = "<b>#{style_icon(SUNRISE_ICON, THEME['primary'], ICON_SIZE_SM)} Week Sunrise / Sunset</b>"
+  astro_header = "<b>#{style_icon(ICON[:SUN][:RISE], THEME['primary'], ICON_SIZE_SM)} Week Sunrise / Sunset</b>"
 
   detail_header = "<b>#{style_icon('󰨳', THEME['primary'], ICON_SIZE_SM)} Week Details</b>"
   detail_table = make_3h_table(three_hour_rows, unit, precip_unit, icon_map)
@@ -676,9 +685,7 @@ def main
     mode = get_mode
 
     # Load theme settings
-    theme_cfg = safe(cfg, 'theme', {})
-
-
+    safe(cfg, 'theme', {})
 
     # Load theme settings
     theme_cfg = safe(cfg, 'theme', {})
@@ -768,4 +775,3 @@ def main
 end
 
 main if __FILE__ == $PROGRAM_NAME
-
