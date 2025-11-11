@@ -361,16 +361,208 @@ module WeatherMode
   end
 end
 
-# TODO: Consolodiate functions
+# Handles weather data fetching and parsing
 module ForecastData
-  # fetch_location_from_ip
-  # fetch_openmeteo_forecast
-  # extract_current
-  # build_next_hours
-  # build_next_days
-  # build_next_3days_detailed
-  # build_astro_by_date
-  # get_sun_times
+  class << self
+    # Fetches location from IP address using ip-api.com
+    def fetch_location_from_ip
+      # Use ip-api.com for free IP geolocation (no API key required)
+      # Rate limit: 45 requests/minute
+      url = URI('http://ip-api.com/json/?fields=lat,lon,city,regionName,country')
+
+      response = Net::HTTP.get_response(url)
+      raise "IP geolocation error: #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+      data = JSON.parse(response.body)
+      raise 'Unexpected response from ip-api.com' unless data.is_a?(Hash)
+
+      {
+        'lat' => Utils.parse_float(data['lat']),
+        'lon' => Utils.parse_float(data['lon']),
+        'location_name' => "#{data['city']}, #{data['regionName']}, #{data['country']}"
+      }
+    end
+
+    # Fetches weather forecast from Open-Meteo API
+    def fetch_openmeteo_forecast(lat, lon, unit_c, forecast_days = 16)
+      url = URI('https://api.open-meteo.com/v1/forecast')
+
+      params = {
+        latitude: lat,
+        longitude: lon,
+        current: 'temperature_2m,apparent_temperature,is_day,precipitation,weather_code',
+        hourly: 'temperature_2m,precipitation_probability,precipitation,weather_code,is_day',
+        daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset',
+        temperature_unit: unit_c ? 'celsius' : 'fahrenheit',
+        precipitation_unit: unit_c ? 'mm' : 'inch',
+        timezone: 'auto',
+        forecast_days: forecast_days
+      }
+      url.query = URI.encode_www_form(params)
+
+      response = Net::HTTP.get_response(url)
+      raise "HTTP Error: #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+      data = JSON.parse(response.body)
+      raise 'Unexpected response from Open-Meteo' unless data.is_a?(Hash)
+
+      data
+    end
+
+    # Extracts current weather conditions from API response
+    def extract_current(blob, _unit, location_name = nil)
+      cur = blob['current']
+      timezone = blob['timezone']
+
+      # Parse current time in the location's timezone
+      now_local = Time.parse(cur['time'])
+
+      {
+        'timezone' => timezone,
+        'location_name' => location_name,
+        'cond' => WeatherCode.description(cur['weather_code']),
+        'code' => cur['weather_code'].to_i,
+        'temp' => Utils.parse_float(cur['temperature_2m']),
+        'feels' => Utils.parse_float(cur['apparent_temperature']),
+        'precip_amt' => Utils.parse_float(cur['precipitation']),
+        'is_day' => Utils.parse_int(cur['is_day'], 1),
+        'now_local' => now_local
+      }
+    end
+
+    # Builds next N hours of forecast data
+    def build_next_hours(blob, now_local, limit)
+      hourly = blob['hourly']
+      times = hourly['time']
+      temps = hourly['temperature_2m']
+      pops = hourly['precipitation_probability']
+      precips = hourly['precipitation']
+      codes = hourly['weather_code']
+      is_days = hourly['is_day']
+
+      hours_list = []
+
+      times.each_with_index do |time_str, i|
+        dt = Time.parse(time_str)
+
+        hours_list << {
+          'dt' => dt,
+          'temp' => Utils.parse_float(temps[i]),
+          'pop' => Utils.parse_int(pops[i]),
+          'precip' => Utils.parse_float(precips[i]),
+          'cond' => WeatherCode.description(codes[i]),
+          'code' => codes[i].to_i,
+          'is_day' => Utils.parse_int(is_days[i], 1)
+        }
+      end
+
+      next_hours = hours_list.select { |h| h['dt'] >= now_local }[0, [0, limit].max]
+      next_hours = hours_list[0, [0, limit].max] if next_hours.empty? && !hours_list.empty?
+      next_hours
+    end
+
+    # Builds daily forecast for next N days
+    def build_next_days(blob, max_days = 16)
+      daily = blob['daily']
+      dates = daily['time']
+      max_temps = daily['temperature_2m_max']
+      min_temps = daily['temperature_2m_min']
+      codes = daily['weather_code']
+      precips = daily['precipitation_sum']
+      pops = daily['precipitation_probability_max']
+      sunrises = daily['sunrise']
+      sunsets = daily['sunset']
+
+      days = []
+
+      dates[0...max_days].each_with_index do |date_str, i|
+        days << {
+          'date' => date_str,
+          'max' => Utils.parse_float(max_temps[i]),
+          'min' => Utils.parse_float(min_temps[i]),
+          'cond' => WeatherCode.description(codes[i]),
+          'code' => codes[i].to_i,
+          'precip' => Utils.parse_float(precips[i]),
+          'pop' => Utils.parse_int(pops[i]),
+          'sunrise' => sunrises[i],
+          'sunset' => sunsets[i]
+        }
+      end
+
+      days
+    end
+
+    # Builds detailed 3-hour interval forecast for next N days
+    def build_next_3days_detailed(blob, now_local, num_days = 3)
+      hourly = blob['hourly']
+      times = hourly['time']
+      temps = hourly['temperature_2m']
+      pops = hourly['precipitation_probability']
+      precips = hourly['precipitation']
+      codes = hourly['weather_code']
+      is_days = hourly['is_day']
+
+      today = now_local.strftime('%Y-%m-%d')
+
+      rows = []
+      picked_dates = Set.new
+
+      times.each_with_index do |time_str, i|
+        dt = Time.parse(time_str)
+        date_str = dt.strftime('%Y-%m-%d')
+
+        # Skip today and past dates
+        next if date_str <= today
+
+        # Only process 3-hour intervals
+        next unless (dt.hour % 3).zero?
+
+        picked_dates << date_str
+
+        # Stop when we have enough days
+        break if picked_dates.size > num_days
+
+        rows << {
+          'date' => date_str,
+          'dt' => dt,
+          'temp' => Utils.parse_float(temps[i]),
+          'pop' => Utils.parse_int(pops[i]),
+          'precip' => Utils.parse_float(precips[i]),
+          'cond' => WeatherCode.description(codes[i]),
+          'code' => codes[i].to_i,
+          'is_day' => Utils.parse_int(is_days[i], 1)
+        }
+      end
+
+      rows.sort_by { |r| [r['date'], r['dt']] }
+    end
+
+    # Builds a lookup hash mapping dates to [sunrise, sunset] times
+    def build_astro_by_date(days)
+      # Map 'YYYY-MM-DD' -> [sunrise_24h, sunset_24h]
+      out = {}
+      days.each do |d|
+        date_str = d['date']
+        sr = d['sunrise'] ? Time.parse(d['sunrise']).strftime('%H:%M') : ''
+        ss = d['sunset'] ? Time.parse(d['sunset']).strftime('%H:%M') : ''
+        out[date_str] = [sr, ss]
+      end
+      out
+    end
+
+    # Gets today's sunrise and sunset times
+    def get_sun_times(days, now_local)
+      today = now_local.strftime('%Y-%m-%d')
+      days.each do |d|
+        next unless d['date'] == today
+
+        sr = d['sunrise'] ? Time.parse(d['sunrise']).strftime('%H:%M') : ''
+        ss = d['sunset'] ? Time.parse(d['sunset']).strftime('%H:%M') : ''
+        return [sr, ss]
+      end
+      ['', '']
+    end
+  end
 end
 
 # TODO: Consolodiate functions
@@ -470,198 +662,6 @@ def to_set(val)
   return Set.new(val.map { |x| norm(x) }) if val.is_a?(Array)
 
   Set[norm(val)]
-end
-
-# ─── Data fetch / parse ─────────────────────────────────────────────────────
-def fetch_location_from_ip
-  # Use ip-api.com for free IP geolocation (no API key required)
-  # Rate limit: 45 requests/minute
-  url = URI('http://ip-api.com/json/?fields=lat,lon,city,regionName,country')
-
-  response = Net::HTTP.get_response(url)
-  raise "IP geolocation error: #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-
-  data = JSON.parse(response.body)
-  raise 'Unexpected response from ip-api.com' unless data.is_a?(Hash)
-
-  {
-    'lat' => Utils.parse_float(data['lat']),
-    'lon' => Utils.parse_float(data['lon']),
-    'location_name' => "#{data['city']}, #{data['regionName']}, #{data['country']}"
-  }
-end
-
-def fetch_openmeteo_forecast(lat, lon, unit_c, forecast_days = 16)
-  url = URI('https://api.open-meteo.com/v1/forecast')
-
-  params = {
-    latitude: lat,
-    longitude: lon,
-    current: 'temperature_2m,apparent_temperature,is_day,precipitation,weather_code',
-    hourly: 'temperature_2m,precipitation_probability,precipitation,weather_code,is_day',
-    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset',
-    temperature_unit: unit_c ? 'celsius' : 'fahrenheit',
-    precipitation_unit: unit_c ? 'mm' : 'inch',
-    timezone: 'auto',
-    forecast_days: forecast_days
-  }
-  url.query = URI.encode_www_form(params)
-
-  response = Net::HTTP.get_response(url)
-  raise "HTTP Error: #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-
-  data = JSON.parse(response.body)
-  raise 'Unexpected response from Open-Meteo' unless data.is_a?(Hash)
-
-  data
-end
-
-def extract_current(blob, _unit, location_name = nil)
-  cur = blob['current']
-  timezone = blob['timezone']
-
-  # Parse current time in the location's timezone
-  now_local = Time.parse(cur['time'])
-
-  {
-    'timezone' => timezone,
-    'location_name' => location_name,
-    'cond' => WeatherCode.description(cur['weather_code']),
-    'code' => cur['weather_code'].to_i,
-    'temp' => Utils.parse_float(cur['temperature_2m']),
-    'feels' => Utils.parse_float(cur['apparent_temperature']),
-    'precip_amt' => Utils.parse_float(cur['precipitation']),
-    'is_day' => Utils.parse_int(cur['is_day'], 1),
-    'now_local' => now_local
-  }
-end
-
-def build_next_hours(blob, now_local, limit)
-  hourly = blob['hourly']
-  times = hourly['time']
-  temps = hourly['temperature_2m']
-  pops = hourly['precipitation_probability']
-  precips = hourly['precipitation']
-  codes = hourly['weather_code']
-  is_days = hourly['is_day']
-
-  hours_list = []
-
-  times.each_with_index do |time_str, i|
-    dt = Time.parse(time_str)
-
-    hours_list << {
-      'dt' => dt,
-      'temp' => Utils.parse_float(temps[i]),
-      'pop' => Utils.parse_int(pops[i]),
-      'precip' => Utils.parse_float(precips[i]),
-      'cond' => WeatherCode.description(codes[i]),
-      'code' => codes[i].to_i,
-      'is_day' => Utils.parse_int(is_days[i], 1)
-    }
-  end
-
-  next_hours = hours_list.select { |h| h['dt'] >= now_local }[0, [0, limit].max]
-  next_hours = hours_list[0, [0, limit].max] if next_hours.empty? && !hours_list.empty?
-  next_hours
-end
-
-def build_next_days(blob, max_days = 16)
-  daily = blob['daily']
-  dates = daily['time']
-  max_temps = daily['temperature_2m_max']
-  min_temps = daily['temperature_2m_min']
-  codes = daily['weather_code']
-  precips = daily['precipitation_sum']
-  pops = daily['precipitation_probability_max']
-  sunrises = daily['sunrise']
-  sunsets = daily['sunset']
-
-  days = []
-
-  dates[0...max_days].each_with_index do |date_str, i|
-    days << {
-      'date' => date_str,
-      'max' => Utils.parse_float(max_temps[i]),
-      'min' => Utils.parse_float(min_temps[i]),
-      'cond' => WeatherCode.description(codes[i]),
-      'code' => codes[i].to_i,
-      'precip' => Utils.parse_float(precips[i]),
-      'pop' => Utils.parse_int(pops[i]),
-      'sunrise' => sunrises[i],
-      'sunset' => sunsets[i]
-    }
-  end
-
-  days
-end
-
-def build_next_3days_detailed(blob, now_local, num_days = 3)
-  hourly = blob['hourly']
-  times = hourly['time']
-  temps = hourly['temperature_2m']
-  pops = hourly['precipitation_probability']
-  precips = hourly['precipitation']
-  codes = hourly['weather_code']
-  is_days = hourly['is_day']
-
-  today = now_local.strftime('%Y-%m-%d')
-
-  rows = []
-  picked_dates = Set.new
-
-  times.each_with_index do |time_str, i|
-    dt = Time.parse(time_str)
-    date_str = dt.strftime('%Y-%m-%d')
-
-    # Skip today and past dates
-    next if date_str <= today
-
-    # Only process 3-hour intervals
-    next unless (dt.hour % 3).zero?
-
-    picked_dates << date_str
-
-    # Stop when we have enough days
-    break if picked_dates.size > num_days
-
-    rows << {
-      'date' => date_str,
-      'dt' => dt,
-      'temp' => Utils.parse_float(temps[i]),
-      'pop' => Utils.parse_int(pops[i]),
-      'precip' => Utils.parse_float(precips[i]),
-      'cond' => WeatherCode.description(codes[i]),
-      'code' => codes[i].to_i,
-      'is_day' => Utils.parse_int(is_days[i], 1)
-    }
-  end
-
-  rows.sort_by { |r| [r['date'], r['dt']] }
-end
-
-def build_astro_by_date(days)
-  # Map 'YYYY-MM-DD' -> [sunrise_24h, sunset_24h]
-  out = {}
-  days.each do |d|
-    date_str = d['date']
-    sr = d['sunrise'] ? Time.parse(d['sunrise']).strftime('%H:%M') : ''
-    ss = d['sunset'] ? Time.parse(d['sunset']).strftime('%H:%M') : ''
-    out[date_str] = [sr, ss]
-  end
-  out
-end
-
-def get_sun_times(days, now_local)
-  today = now_local.strftime('%Y-%m-%d')
-  days.each do |d|
-    next unless d['date'] == today
-
-    sr = d['sunrise'] ? Time.parse(d['sunrise']).strftime('%H:%M') : ''
-    ss = d['sunset'] ? Time.parse(d['sunset']).strftime('%H:%M') : ''
-    return [sr, ss]
-  end
-  ['', '']
 end
 
 def make_astro3d_table(rows, astro_by_date)
@@ -908,7 +908,7 @@ def main
     location_name = nil
     if lat_cfg == 'auto' || lon_cfg == 'auto'
       # Fetch location from IP
-      geo_data = fetch_location_from_ip
+      geo_data = ForecastData.fetch_location_from_ip
       lat = geo_data['lat']
       lon = geo_data['lon']
       location_name = geo_data['location_name']
@@ -919,13 +919,13 @@ def main
     end
 
     # data
-    blob = fetch_openmeteo_forecast(lat, lon, unit_c, forecast_days)
-    cur = extract_current(blob, unit, location_name)
-    next_hours = build_next_hours(blob, cur['now_local'], hours_ahead)
-    days = build_next_days(blob, forecast_days)
-    next_3days_detailed = build_next_3days_detailed(blob, cur['now_local'], 3)
-    sunrise, sunset = get_sun_times(days, cur['now_local'])
-    astro_by_date = build_astro_by_date(days)
+    blob = ForecastData.fetch_openmeteo_forecast(lat, lon, unit_c, forecast_days)
+    cur = ForecastData.extract_current(blob, unit, location_name)
+    next_hours = ForecastData.build_next_hours(blob, cur['now_local'], hours_ahead)
+    days = ForecastData.build_next_days(blob, forecast_days)
+    next_3days_detailed = ForecastData.build_next_3days_detailed(blob, cur['now_local'], 3)
+    sunrise, sunset = ForecastData.get_sun_times(days, cur['now_local'])
+    astro_by_date = ForecastData.build_astro_by_date(days)
 
     # icons
     Icons.init
