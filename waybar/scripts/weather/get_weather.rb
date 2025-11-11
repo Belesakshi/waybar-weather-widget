@@ -270,6 +270,42 @@ module Temperature
   end
 end
 
+# Handles mode toggles to view different weather tooltips
+module WeatherMode
+  MODES = %w[default weekview].freeze
+  DEFAULT_MODE = MODES.first.freeze
+
+  def self.get
+    mode = File.read(file_path, encoding: 'utf-8').strip
+    MODES.include?(mode) ? mode : DEFAULT_MODE
+  rescue Errno::ENOENT
+    DEFAULT_MODE
+  end
+
+  def self.set(mode)
+    return unless MODES.include?(mode)
+
+    File.write(file_path, mode, encoding: 'utf-8')
+  end
+
+  def self.cycle(direction = 'next')
+    current_index = MODES.index(get) || 0
+    new_index = if direction == 'prev'
+                  (current_index - 1) % MODES.length
+                else
+                  (current_index + 1) % MODES.length
+                end
+    set(MODES[new_index])
+  end
+
+  private_class_method def self.file_path
+    state_home = ENV['XDG_STATE_HOME'] || File.expand_path('~/.local/state')
+    dir = File.join(state_home, 'waybar')
+    FileUtils.mkdir_p(dir)
+    File.join(dir, 'weather_mode')
+  end
+end
+
 # ─── Utilities ──────────────────────────────────────────────────────────────
 def safe(hash, key, default = nil)
   hash.key?(key) ? hash[key] : default
@@ -328,32 +364,6 @@ end
 
 def wmo_code_description(code)
   WMO_CODE_DESCRIPTIONS[code.to_i] || 'Unknown'
-end
-
-def mode_file
-  state_home = ENV['XDG_STATE_HOME'] || File.expand_path('~/.local/state')
-  dir = File.join(state_home, 'waybar')
-  FileUtils.mkdir_p(dir)
-  File.join(dir, 'weather_mode')
-end
-
-def get_mode
-  mode = File.read(mode_file, encoding: 'utf-8').strip
-  %w[default weekview].include?(mode) ? mode : 'default'
-rescue Errno::ENOENT
-  'default'
-end
-
-def set_mode(mode)
-  File.write(mode_file, mode, encoding: 'utf-8')
-end
-
-def cycle_mode(direction = 'next')
-  modes = %w[default weekview]
-  cur = get_mode
-  i = modes.index(cur) || 0
-  i = direction == 'prev' ? (i - 1) % modes.length : (i + 1) % modes.length
-  set_mode(modes[i])
 end
 
 # ─── Icons ──────────────────────────────────────────────────────────────────
@@ -800,13 +810,13 @@ def main
   unless ARGV.empty?
     arg = ARGV[0]
     if %w[--next --toggle].include?(arg)
-      cycle_mode('next')
+      WeatherMode.cycle
       return
     elsif arg == '--prev'
-      cycle_mode('prev')
+      WeatherMode.cycle('prev')
       return
     elsif arg == '--set' && ARGV.length > 1
-      set_mode(ARGV[1])
+      WeatherMode.set(ARGV[1])
       return
     end
   end
@@ -815,7 +825,7 @@ def main
 
   begin
     cfg = load_config(script_path)
-    mode = get_mode
+    mode = WeatherMode.get
     Config.init(cfg)
 
     # Parse config
