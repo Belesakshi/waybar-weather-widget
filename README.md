@@ -15,11 +15,9 @@
 <p align="center">
 A <strong>detailed and customizable</strong> weather widget for Waybar, powered by the Open-Meteo API.
 
-
-
 </p>
 
-https://github.com/user-attachments/assets/32f5bb93-c096-41f1-a141-40ccaba9a1cc
+<https://github.com/user-attachments/assets/32f5bb93-c096-41f1-a141-40ccaba9a1cc>
 
 ## ✨ Features
 
@@ -37,6 +35,23 @@ It provides current weather, hourly forecasts, and a multi-day forecast with a c
   - You can change the number of hours and days to forecast.
 - **Dynamic Icons:** Weather icons change for day and night.
 - **Command-line Interface:** A simple CLI to toggle between tooltip views.
+
+## Overview
+
+Features a tooltip with multiple modes.
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/screenshots/default_view.pn" alt="Default" width="180"><br>
+      <strong>Default Tooltip</strong>
+    </td>
+    <td align="center">
+      <img src="assets/screenshots/week_details.png" alt="Week Details" width="180"><br>
+      <strong>Week Details</strong>
+    </td>
+  </tr>
+</table>
 
 ## ⬇️ Installation
 
