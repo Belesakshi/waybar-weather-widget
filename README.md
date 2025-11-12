@@ -47,7 +47,7 @@ In addition, you can use [nerd fonts](#nerd-font-view) or [emojis](#emoji-view) 
 
 <a id="nerd-font-view"></a>
 
-<h3 align="center">Nerd Fonts</h3>
+<h3 align="center">🤓 Nerd Fonts</h3>
 
 <table>
   <tr>
@@ -64,7 +64,7 @@ In addition, you can use [nerd fonts](#nerd-font-view) or [emojis](#emoji-view) 
 
 <a id="emoji-view"></a>
 
-<h3 align="center">Emojis</h3>
+<h3 align="center">😄 Emojis</h3>
 
 <table>
   <tr>
