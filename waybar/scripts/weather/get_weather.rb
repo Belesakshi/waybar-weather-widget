@@ -68,6 +68,11 @@ ASTRO3D_HEADER_TEXT = format(
 module Utils
   class << self
     # Loads a JSON or JSONC file and parses it.
+    #
+    # @param path [String] Path to the JSON/JSONC file
+    # @return [Hash, Array] Parsed JSON data
+    # @raise [Errno::ENOENT] If file doesn't exist
+    # @raise [JSON::ParserError] If file contains invalid JSON
     def load_json(path)
       file_content = File.read(path, encoding: 'utf-8')
       # Basic JSONC support: remove single-line comments
@@ -76,6 +81,10 @@ module Utils
     end
 
     # Parses a value into an integer, with a fallback default.
+    #
+    # @param val [Object] Value to parse (Numeric, String, or nil)
+    # @param default [Integer] Default value if parsing fails
+    # @return [Integer] Parsed integer or default
     def parse_int(val, default = 0)
       return default if val.nil? || val == ''
       return val.to_i if val.is_a?(Numeric)
@@ -312,11 +321,17 @@ module Precipitation
   end
 end
 
-# Handles mode toggles to view different weather tooltips
+# Handles mode toggles to view different weather tooltips.
+# Stores the current mode in XDG_STATE_HOME/waybar/weather_mode.
 module WeatherMode
-  MODES = %w[default weekview].freeze
-  DEFAULT_MODE = MODES.first.freeze
+  DEFAULT = 'default'
+  WEEKVIEW = 'weekview'
+  MODES = [DEFAULT, WEEKVIEW].freeze
+  DEFAULT_MODE = DEFAULT
 
+  # Gets the current display mode.
+  #
+  # @return [String] Current mode (DEFAULT or WEEKVIEW)
   def self.get
     mode = File.read(file_path, encoding: 'utf-8').strip
     MODES.include?(mode) ? mode : DEFAULT_MODE
@@ -324,12 +339,20 @@ module WeatherMode
     DEFAULT_MODE
   end
 
+  # Sets the display mode.
+  #
+  # @param mode [String] Mode to set (must be in MODES)
+  # @return [void]
   def self.set(mode)
     return unless MODES.include?(mode)
 
     File.write(file_path, mode, encoding: 'utf-8')
   end
 
+  # Cycles to the next or previous mode.
+  #
+  # @param direction [String] 'next' or 'prev'
+  # @return [void]
   def self.cycle(direction = 'next')
     current_index = MODES.index(get) || 0
     new_index = if direction == 'prev'
@@ -351,6 +374,37 @@ end
 # Handles weather data fetching and parsing
 module ForecastData
   class << self
+    # Resolves location coordinates from settings (auto-detect or manual).
+    # If latitude or longitude is set to 'auto', uses IP geolocation.
+    # Otherwise returns the configured coordinates.
+    #
+    # @param settings [Hash] Configuration settings hash with :latitude and :longitude keys
+    # @return [Hash] Location data with :lat, :lon, and :location_name keys
+    # @example Auto-detect location
+    #   resolve_location({latitude: 'auto', longitude: 'auto'})
+    #   # => {lat: 40.7128, lon: -74.0060, location_name: "New York, NY, USA"}
+    # @example Use configured location
+    #   resolve_location({latitude: 51.5074, longitude: -0.1278})
+    #   # => {lat: 51.5074, lon: -0.1278, location_name: nil}
+    def resolve_location(settings)
+      if settings[:latitude].to_s == 'auto' || settings[:longitude].to_s == 'auto'
+        # Auto-detect location from IP
+        geo_data = fetch_location_from_ip
+        {
+          lat: geo_data['lat'],
+          lon: geo_data['lon'],
+          location_name: geo_data['location_name']
+        }
+      else
+        # Use configured coordinates
+        {
+          lat: Utils.parse_float(settings[:latitude]),
+          lon: Utils.parse_float(settings[:longitude]),
+          location_name: nil
+        }
+      end
+    end
+
     # Fetches location from IP address using ip-api.com
     def fetch_location_from_ip
       # Use ip-api.com for free IP geolocation (no API key required)
@@ -370,7 +424,15 @@ module ForecastData
       }
     end
 
-    # Fetches weather forecast from Open-Meteo API
+    # Fetches weather forecast from Open-Meteo API.
+    #
+    # @param lat [Float] Latitude coordinate
+    # @param lon [Float] Longitude coordinate
+    # @param unit_c [Boolean] True for Celsius, false for Fahrenheit
+    # @param forecast_days [Integer] Number of days to forecast (max 16)
+    # @return [Hash] Parsed API response with current, hourly, and daily data
+    # @raise [Net::HTTPError] If API request fails
+    # @raise [JSON::ParserError] If response is not valid JSON
     def fetch_openmeteo_forecast(lat, lon, unit_c, forecast_days = 16)
       url = URI('https://api.open-meteo.com/v1/forecast')
 
@@ -810,6 +872,90 @@ module Icons
   end
 end
 
+# View building strategies using the Strategy pattern.
+# Delegates to appropriate builder based on display mode.
+module ViewBuilder
+  # Builds view output by selecting the appropriate strategy.
+  #
+  # @param mode [String] Display mode (WeatherMode::DEFAULT or WeatherMode::WEEKVIEW)
+  # @param weather_data [Hash] Weather data including :cur, :days, :next_hours, etc.
+  # @param settings [Hash] Configuration settings
+  # @param unit [String] Temperature unit ('°C' or '°F')
+  # @param precip_unit [String] Precipitation unit ('mm' or 'in')
+  # @return [Array<String, String>] Text and tooltip strings for waybar display
+  def self.build(mode, weather_data, settings, unit, precip_unit)
+    builder = mode == WeatherMode::WEEKVIEW ? WeekViewBuilder : DefaultViewBuilder
+    builder.build(weather_data, settings, unit, precip_unit)
+  end
+end
+
+# Default view builder strategy - shows current conditions, hourly forecast, and daily overview.
+module DefaultViewBuilder
+  # Builds the default view with hourly and daily forecast tables.
+  #
+  # @param weather_data [Hash] Weather data hash
+  # @param settings [Hash] Configuration settings
+  # @param unit [String] Temperature unit
+  # @param precip_unit [String] Precipitation unit
+  # @return [Array<String, String>] Text and tooltip
+  def self.build(weather_data, settings, unit, precip_unit)
+    cur = weather_data[:cur]
+    days = weather_data[:days]
+    next_hours = weather_data[:next_hours]
+    sunrise = weather_data[:sunrise]
+    sunset = weather_data[:sunset]
+    fallback_icon = weather_data[:fallback_icon]
+
+    TooltipBuilder.build_text_and_tooltip(
+      timezone: cur['timezone'], cond: cur['cond'], temp: cur['temp'], feels: cur['feels'],
+      precip_amt: cur['precip_amt'], code: cur['code'], is_day: cur['is_day'], next_hours: next_hours,
+      days: days, unit: unit, precip_unit: precip_unit,
+      icon_pos: settings[:icon_position], fallback_icon: fallback_icon, sunrise: sunrise, sunset: sunset,
+      location_name: cur['location_name'], forecast_days: settings[:forecast_days]
+    )
+  end
+end
+
+# Week view builder strategy - shows detailed 3-hour interval forecast and sunrise/sunset times.
+module WeekViewBuilder
+  # Builds the week view with 3-hour intervals and astronomy data.
+  #
+  # @param weather_data [Hash] Weather data hash
+  # @param settings [Hash] Configuration settings
+  # @param unit [String] Temperature unit
+  # @param precip_unit [String] Precipitation unit
+  # @return [Array<String, String>] Text and tooltip
+  def self.build(weather_data, settings, unit, precip_unit)
+    cur = weather_data[:cur]
+    next_hours = weather_data[:next_hours]
+    sunrise = weather_data[:sunrise]
+    sunset = weather_data[:sunset]
+    fallback_icon = weather_data[:fallback_icon]
+    blob = weather_data[:blob]
+    days = weather_data[:days]
+
+    next_3days = ForecastData.build_next_3days_detailed(blob, cur['now_local'], 3)
+    astro_by_date = ForecastData.build_astro_by_date(days)
+
+    text = TooltipBuilder.build_text(
+      cond: cur['cond'], temp: cur['temp'], code: cur['code'], is_day: cur['is_day'],
+      icon_pos: settings[:icon_position], fallback_icon: fallback_icon, unit: unit
+    )
+
+    tooltip = TooltipBuilder.build_week_view_tooltip(
+      timezone: cur['timezone'], cond: cur['cond'], temp: cur['temp'], feels: cur['feels'],
+      unit: unit, code: cur['code'], is_day: cur['is_day'], fallback_icon: fallback_icon,
+      three_hour_rows: next_3days, precip_unit: precip_unit,
+      sunrise: sunrise, sunset: sunset,
+      now_pop: next_hours.empty? ? nil : next_hours[0]['pop'].to_i,
+      precip_amt: cur['precip_amt'], astro_by_date: astro_by_date,
+      location_name: cur['location_name']
+    )
+
+    [text, tooltip]
+  end
+end
+
 # Parses weather code descriptions
 module WeatherCode
   def self.description(code)
@@ -870,15 +1016,11 @@ private def handle_cli_args(args)
   end
 end
 
-# New method containing all the main application logic
-private def run_weather_update
-  # --- 1. Initialization ---
+# Initialize configuration modules
+private def initialize_app_config(settings)
   Config.init
   Icons.init
-  mode = WeatherMode.get
 
-  # --- 2. Get Config Settings ---
-  settings = Config.settings
   unit_c = settings[:unit] == 'Celsius'
   unit = unit_c ? '°C' : '°F'
   precip_unit = unit_c ? 'mm' : 'in'
@@ -889,19 +1031,11 @@ private def run_weather_update
     month: Time.now.month
   )
 
-  # --- 3. Get Location ---
-  location_name = nil
-  if settings[:latitude].to_s == 'auto' || settings[:longitude].to_s == 'auto'
-    geo_data = ForecastData.fetch_location_from_ip
-    lat = geo_data['lat']
-    lon = geo_data['lon']
-    location_name = geo_data['location_name']
-  else
-    lat = Utils.parse_float(settings[:latitude])
-    lon = Utils.parse_float(settings[:longitude])
-  end
+  { unit_c: unit_c, unit: unit, precip_unit: precip_unit }
+end
 
-  # --- 4. Fetch and Parse Data ---
+# Fetch and build all weather data structures
+private def fetch_weather_data(lat, lon, settings, unit_c, location_name, unit)
   blob = ForecastData.fetch_openmeteo_forecast(lat, lon, unit_c, settings[:forecast_days])
   cur = ForecastData.extract_current(blob, unit, location_name)
   days = ForecastData.build_next_days(blob, settings[:forecast_days])
@@ -909,52 +1043,35 @@ private def run_weather_update
   sunrise, sunset = ForecastData.get_sun_times(days, cur['now_local'])
   fallback_icon = Icons.weather_icon(cur['code'], cur['is_day'] != 0) || ''
 
-  # --- 5. Build Output (Lazy) ---
-  text = nil
-  tooltip = nil
+  { blob: blob, cur: cur, days: days, next_hours: next_hours, sunrise: sunrise, sunset: sunset,
+    fallback_icon: fallback_icon }
+end
 
-  if mode == 'weekview'
-    # Build the detailed week view
-    next_3days = ForecastData.build_next_3days_detailed(blob, cur['now_local'], 3)
-    astro_by_date = ForecastData.build_astro_by_date(days)
+# Generate text and tooltip based on mode (using Strategy pattern)
+private def generate_output(mode, weather_data, settings, unit, precip_unit)
+  ViewBuilder.build(mode, weather_data, settings, unit, precip_unit)
+end
 
-    # --- THIS IS THE FIX ---
-    # Call the new, simple build_text method
-    text = TooltipBuilder.build_text(
-      cond: cur['cond'], temp: cur['temp'], code: cur['code'], is_day: cur['is_day'],
-      icon_pos: settings[:icon_position], fallback_icon: fallback_icon, unit: unit
-    )
-
-    tooltip = TooltipBuilder.build_week_view_tooltip(
-      timezone: cur['timezone'], cond: cur['cond'], temp: cur['temp'], feels: cur['feels'],
-      unit: unit, code: cur['code'], is_day: cur['is_day'], fallback_icon: fallback_icon,
-      three_hour_rows: next_3days, precip_unit: precip_unit,
-      sunrise: sunrise, sunset: sunset,
-      now_pop: next_hours.empty? ? nil : next_hours[0]['pop'].to_i,
-      precip_amt: cur['precip_amt'], astro_by_date: astro_by_date,
-      location_name: cur['location_name']
-    )
-  else
-    # Build the default view
-    text, tooltip = TooltipBuilder.build_text_and_tooltip(
-      timezone: cur['timezone'], cond: cur['cond'], temp: cur['temp'], feels: cur['feels'],
-      precip_amt: cur['precip_amt'], code: cur['code'], is_day: cur['is_day'], next_hours: next_hours,
-      days: days, unit: unit, precip_unit: precip_unit,
-      icon_pos: settings[:icon_position], fallback_icon: fallback_icon, sunrise: sunrise, sunset: sunset,
-      location_name: cur['location_name'], forecast_days: settings[:forecast_days]
-    )
-  end
-
+# Main application logic orchestrator
+private def run_weather_update
+  settings = Config.settings
+  mode = WeatherMode.get
+  units = initialize_app_config(settings)
+  location = ForecastData.resolve_location(settings)
+  weather_data = fetch_weather_data(
+    location[:lat], location[:lon], settings,
+    units[:unit_c], location[:location_name], units[:unit]
+  )
+  text, tooltip = generate_output(mode, weather_data, settings, units[:unit], units[:precip_unit])
   classes = [
     'weather',
-    mode == 'weekview' ? 'mode-weekview' : 'mode-default',
-    next_hours.any? && next_hours[0]['pop'].to_i >= 60 ? 'pop-high' : 'pop-low'
+    mode == WeatherMode::WEEKVIEW ? 'mode-weekview' : 'mode-default',
+    weather_data[:next_hours].any? && weather_data[:next_hours][0]['pop'].to_i >= 60 ? 'pop-high' : 'pop-low'
   ]
-
-  out = { text: text, tooltip: tooltip, alt: cur['cond'], class: classes }
+  out = { text: text, tooltip: tooltip, alt: weather_data[:cur]['cond'], class: classes }
   puts JSON.generate(out)
 
-# --- 6. Error Handling ---
+# --- Error Handling ---
 rescue Net::HTTPError, SocketError, Timeout::Error => e
   sleep 2
   puts JSON.generate(text: '…', tooltip: "network error: #{e.message}")
