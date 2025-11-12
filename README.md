@@ -30,7 +30,8 @@ It provides current weather, hourly forecasts, and a multi-day forecast with a c
   - **Week View:** Shows a detailed 3-hour interval forecast for the next few days, including sunrise and sunset times.
 - **Customizable:**
   - Supports both Celsius and Fahrenheit.
-  - Uses Nerd Font icons for weather conditions.
+  - Supports both 12-hour (AM/PM) and 24-hour time formats.
+  - Uses Nerd Font icons or emoji for weather conditions.
   - All colors are customizable.
   - You can change the number of hours and days to forecast.
 - **Dynamic Icons:** Weather icons change for day and night.
@@ -101,9 +102,10 @@ Features a tooltip with multiple modes that can be cycled through to view more w
      "longitude": "auto", // e.g., -74.01 or "auto" to detect from IP address
      "refresh_interval": 900, // Seconds between API calls (e.g., 900 = 15 min)
      "unit": "Fahrenheit", // "Fahrenheit" or "Celsius"
-     "icon_type": "nerd_font", // "nerd_font" or "emoji"
+     "time_format": "24h", // "24h" or "12h"
+     "icon_type": "nerd", // "nerd" or "emoji"
      "icon_position": "left", // "left" or "right"
-     "font_size": 14, // Base font size for icons
+     "font_size": 14, // Base font size for icons (in px)
      "hours_ahead": 24, // Number of hours to show in hourly tooltip
      "forecast_days": 10, // Number of days for forecast (max 16)
      "colors": {
