@@ -66,7 +66,7 @@ module Utils
     def fmt_hour(datetime, time_format = nil)
       format = time_format || Config.time_format
       if format == '12h'
-        datetime.strftime('%I%P') # e.g., "03pm", "12am"
+        datetime.strftime('%I %P') # e.g., "03 pm", "12 am"
       else
         datetime.strftime('%H') # e.g., "03", "15"
       end
@@ -869,7 +869,7 @@ module TooltipBuilder
 
     # Builds hourly forecast table
     def make_hour_table(next_hours)
-      hr_col_width = Config.time_format == '12h' ? 5 : 4
+      hr_col_width = Config.time_format == '12h' ? 6 : 4
       hour_table_header_text = format(
         "%<hr>-#{hr_col_width}s │ %<temp>5s │ %<pop>4s │ %<precip>7s │ Cond",
         hr: 'Hr', temp: 'Temp', pop: 'PoP', precip: 'Precip'
@@ -937,7 +937,7 @@ module TooltipBuilder
 
     # Builds 3-hour interval forecast table
     def make_3h_table(rows)
-      hr_col_width = Config.time_format == '12h' ? 5 : 4
+      hr_col_width = Config.time_format == '12h' ? 6 : 4
       detail3h_header_text = format(
         "%-<date>9s │ %<hr>#{hr_col_width}s │ %<temp>5s │ %<pop>4s │ %<precip>7s │ Cond",
         date: 'Date', hr: 'Hr', temp: 'Temp', pop: 'PoP', precip: 'Precip'
