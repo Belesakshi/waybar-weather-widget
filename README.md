@@ -17,7 +17,7 @@ A <strong>detailed and customizable</strong> weather widget for Waybar, powered 
 
 </p>
 
-https://github.com/user-attachments/assets/b50f95fa-8b9b-41f4-b33f-6bfda8e18fa2
+<https://github.com/user-attachments/assets/b50f95fa-8b9b-41f4-b33f-6bfda8e18fa2>
 
 ## ✨ Features
 
@@ -52,11 +52,11 @@ In addition, you can use [nerd fonts](#nerd-font-view) or [emojis](#emoji-view) 
 <table>
   <tr>
     <td align="center">
-      <img src="./assets/screenshots/default_view.png" alt="Default" width="auto"><br>
+      <img src="./assets/screenshots/nerd_default.png" alt="Default" width="auto"><br>
       <strong>Default Tooltip</strong><br><em>Current Details, Hourly, Daily</em>
     </td>
     <td align="center">
-      <img src="./assets/screenshots/week_details.png" alt="Week Details" width="auto"><br>
+      <img src="./assets/screenshots/nerd_week.png" alt="Week Details" width="auto"><br>
       <strong>Week Details</strong><br><em>Sunrise/Sunset, 3-Hour Snapshot</em>
     </td>
   </tr>
@@ -69,11 +69,11 @@ In addition, you can use [nerd fonts](#nerd-font-view) or [emojis](#emoji-view) 
 <table>
   <tr>
     <td align="center">
-      <img src="./assets/screenshots/default_view.png" alt="Default" width="auto"><br>
+      <img src="./assets/screenshots/emoji_default.png" alt="Default" width="auto"><br>
       <strong>Default Tooltip</strong><br><em>Current Details, Hourly, Daily</em>
     </td>
     <td align="center">
-      <img src="./assets/screenshots/week_details.png" alt="Week Details" width="auto"><br>
+      <img src="./assets/screenshots/emoji_week.png" alt="Week Details" width="auto"><br>
       <strong>Week Details</strong><br><em>Sunrise/Sunset, 3-Hour Snapshot</em>
     </td>
   </tr>
