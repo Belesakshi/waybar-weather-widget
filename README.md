@@ -26,8 +26,8 @@ It provides current weather, hourly forecasts, and a multi-day forecast with a c
 - **Current Weather:** Displays the current temperature and a weather icon for current conditions.
 - **Geolocation:** Automatically detects your location via your IP address, or you can set a manual latitude/longitude.
 - **Detailed Tooltips:**
-  - **Default View:** Shows current details, an hourly forecast (default 12 hours, max 24), and a up to 16-day daily forecast.
-  - **Week View:** Shows a detailed 3-hour interval forecast for the next few days, including sunrise and sunset times.
+  - **Default View:** Shows current details, an hourly forecast (default 12 hours, max 24), and a multi-day forecast (up to 16 days).
+  - **Week View:** Shows a detailed 3-hour interval forecast for the next few days, including sunrise/sunset times, and a 3-day snapshot.
 - **Customizable:**
   - Supports both Celsius and Fahrenheit.
   - Supports both 12-hour (AM/PM) and 24-hour time formats.
@@ -45,11 +45,11 @@ Features a tooltip with multiple modes that can be cycled through to view more w
   <tr>
     <td align="center">
       <img src="./assets/screenshots/default_view.png" alt="Default" width="auto"><br>
-      <strong>Default Tooltip</strong><br><em>Current Details, Hourly Forecast (12h default, 24h max), 16-Day Forecast</em>
+      <strong>Default Tooltip</strong><br><em>Current Details, Hourly, Daily</em>
     </td>
     <td align="center">
       <img src="./assets/screenshots/week_details.png" alt="Week Details" width="auto"><br>
-      <strong>Week Details</strong><br><em>Current Details, Sunrise/Sunset Times, and 3-Hour Interval Snapshot over Next 3 Days</em>
+      <strong>Week Details</strong><br><em>Sunrise/Sunset, 3-Hour Snapshot</em>
     </td>
   </tr>
 </table>
@@ -106,8 +106,8 @@ Features a tooltip with multiple modes that can be cycled through to view more w
      "icon_type": "nerd", // "nerd" or "emoji"
      "icon_position": "left", // "left" or "right"
      "font_size": 14, // Base font size for icons (in px)
-     "hours_ahead": 12, // Number of hours to show in hourly tooltip (max 24)
-     "forecast_days": 10, // Number of days for forecast (max 16)
+     "hourly_number_of_hours": 12, // Number of hours to show in hourly tooltip (max 24)
+     "daily_number_of_days": 10, // Number of days for forecast (max 16)
      "colors": {
        "primary": "#42A5F5", // Icon default
        "cold": "skyblue", // Temp cold

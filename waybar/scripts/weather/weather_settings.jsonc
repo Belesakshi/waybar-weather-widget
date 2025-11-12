@@ -6,8 +6,8 @@
   "time_format": "24h",       // "24h" or "12h"
   "icon_type": "nerd",        // "nerd" or "emoji"
   "icon_position": "left",    // "left" or "right".
-  "hours_ahead": 12,          // Number of hours to show in hourly tooltip (max 24)
-  "forecast_days": 10,        // Number of days for forecast (max 16)
+  "hourly_number_of_hours": 12,          // Number of hours to show in hourly tooltip (max 24)
+  "daily_number_of_days": 10,        // Number of days for forecast (max 16)
   "colors": {
     "primary": "#42A5F5",     // Icon default
     "cold": "skyblue",        // Temp cold

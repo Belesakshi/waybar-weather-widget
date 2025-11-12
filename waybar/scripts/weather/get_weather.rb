@@ -99,8 +99,8 @@ module Config
     icon_position: 'left', # 'left' | 'right'
     font_size: 14, # in px
     unit: 'Celsius', # 'Celsius' | 'Fahrenheit'
-    hours_ahead: 24, # max 24
-    forecast_days: 10, # max 16
+    hourly_number_of_hours: 24, # max 24
+    daily_number_of_days: 10, # max 16
     latitude: 'auto', # or float
     longitude: 'auto', # or float
     refresh_interval: 900, # seconds between API calls
@@ -113,8 +113,8 @@ module Config
     'icon_position' => :icon_position,
     'font_size' => :font_size,
     'unit' => :unit,
-    'hours_ahead' => :hours_ahead,
-    'forecast_days' => :forecast_days,
+    'hourly_number_of_hours' => :hourly_number_of_hours,
+    'daily_number_of_days' => :daily_number_of_days,
     'latitude' => :latitude,
     'longitude' => :longitude,
     'refresh_interval' => :refresh_interval,
@@ -140,10 +140,10 @@ module Config
         @settings[settings_key] = user_config[config_key] if user_config.key?(config_key)
       end
 
-      # Enforce maximum limit for hours_ahead (max 24 hours)
-      if @settings[:hours_ahead]
-        @settings[:hours_ahead] = [[1, @settings[:hours_ahead].to_i].max, 24].min
-      end
+      # Enforce maximum limit for hourly_number_of_hours (max 24 hours)
+      return unless @settings[:hourly_number_of_hours]
+
+      @settings[:hourly_number_of_hours] = [[1, @settings[:hourly_number_of_hours].to_i].max, 24].min
     end
 
     def colors
@@ -592,11 +592,11 @@ module ForecastData
     # @param lat [Float] Latitude coordinate
     # @param lon [Float] Longitude coordinate
     # @param unit_c [Boolean] True for Celsius, false for Fahrenheit
-    # @param forecast_days [Integer] Number of days to forecast (max 16)
+    # @param daily_number_of_days [Integer] Number of days to forecast (max 16)
     # @return [Hash] Parsed API response with current, hourly, and daily data
     # @raise [Net::HTTPError] If API request fails
     # @raise [JSON::ParserError] If response is not valid JSON
-    def fetch_openmeteo_forecast(lat, lon, unit_c, forecast_days = 16)
+    def fetch_openmeteo_forecast(lat, lon, unit_c, daily_number_of_days = 16)
       url = URI('https://api.open-meteo.com/v1/forecast')
 
       params = {
@@ -608,7 +608,7 @@ module ForecastData
         temperature_unit: unit_c ? 'celsius' : 'fahrenheit',
         precipitation_unit: unit_c ? 'mm' : 'inch',
         timezone: 'auto',
-        forecast_days: forecast_days
+        daily_number_of_days: daily_number_of_days
       }
       url.query = URI.encode_www_form(params)
 
@@ -815,7 +815,7 @@ module TooltipBuilder
 
     def build_text_and_tooltip(timezone:, cond:, temp:, feels:, precip_amt:, code:, is_day:, next_hours:,
                                days:, icon_pos:, fallback_icon:,
-                               sunrise:, sunset:, location_name: nil, forecast_days: 16)
+                               sunrise:, sunset:, location_name: nil, daily_number_of_days: 16)
       # 1. Call the new method to get the text
       text = build_text(
         cond: cond, temp: temp, code: code, is_day: is_day,
@@ -836,10 +836,10 @@ module TooltipBuilder
 
       tooltip = "#{header_block}\n" \
                 "<b>#{Icons.style_icon(Icons.get_ui('clock'), Config.colors['primary'],
-                                       Config.pongo_size[:small])} Next #{next_hours.length} hours</b>\n\n" \
+                                       Config.pongo_size[:small])} Hourly</b>\n\n" \
                 "#{next_hours_table}\n\n#{divider}\n\n" \
                 "<b>#{Icons.style_icon(Icons.get_ui('calendar'), Config.colors['primary'],
-                                       Config.pongo_size[:small])} Next #{forecast_days} Days</b>\n\n#{next_days_overview_table}"
+                                       Config.pongo_size[:small])} Daily</b>\n\n#{next_days_overview_table}"
 
       # 3. Return both
       [text, tooltip]
@@ -1025,10 +1025,10 @@ module TooltipBuilder
 
       astro_table = make_astro3d_table(three_hour_rows, astro_by_date || {})
       astro_header = "<b>#{Icons.style_icon(Icons.get_ui('sun.rise'), Config.colors['primary'],
-                                            Config.pongo_size[:small])} Week Sunrise / Sunset</b>"
+                                            Config.pongo_size[:small])} Sunrise / Sunset</b>"
 
       detail_header = "<b>#{Icons.style_icon(Icons.get_ui('calendar'), Config.colors['primary'],
-                                             Config.pongo_size[:small])} Week Details</b>"
+                                             Config.pongo_size[:small])} 3 Day Snapshot</b>"
       detail_table = make_3h_table(three_hour_rows)
 
       "#{header_block}\n#{astro_header}\n\n#{astro_table}\n\n#{divider}\n\n#{detail_header}\n\n#{detail_table}"
@@ -1074,7 +1074,7 @@ module DefaultViewBuilder
         precip_amt: cur['precip_amt'], code: cur['code'], is_day: cur['is_day'], next_hours: next_hours,
         days: days,
         icon_pos: settings[:icon_position], fallback_icon: fallback_icon, sunrise: sunrise, sunset: sunset,
-        location_name: cur['location_name'], forecast_days: settings[:forecast_days]
+        location_name: cur['location_name'], daily_number_of_days: settings[:daily_number_of_days]
       )
     end
   end
@@ -1196,10 +1196,10 @@ end
 
 # Fetch and build all weather data structures
 private def fetch_weather_data(lat, lon, settings, location_name)
-  blob = ForecastData.fetch_openmeteo_forecast(lat, lon, Config.unit_c?, settings[:forecast_days])
+  blob = ForecastData.fetch_openmeteo_forecast(lat, lon, Config.unit_c?, settings[:daily_number_of_days])
   cur = ForecastData.extract_current(blob, Config.unit, location_name)
-  days = ForecastData.build_next_days(blob, settings[:forecast_days])
-  next_hours = ForecastData.build_next_hours(blob, cur['now_local'], settings[:hours_ahead])
+  days = ForecastData.build_next_days(blob, settings[:daily_number_of_days])
+  next_hours = ForecastData.build_next_hours(blob, cur['now_local'], settings[:hourly_number_of_hours])
   sunrise, sunset = ForecastData.get_sun_times(days, cur['now_local'])
   fallback_icon = Icons.weather_icon(cur['code'], cur['is_day'] != 0) || ''
 
