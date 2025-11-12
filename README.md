@@ -43,6 +43,29 @@ It provides current weather, hourly forecasts, and a multi-day forecast with a c
 
 Features a tooltip with multiple modes that can be cycled through to view more weather data.
 
+In addition, you can use [nerd fonts](#nerd-font-view) or [emojis](#emoji-view) and customize all the colors!
+
+<a id="nerd-font-view"></a>
+
+<h3 align="center">Nerd Fonts</h3>
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="./assets/screenshots/default_view.png" alt="Default" width="auto"><br>
+      <strong>Default Tooltip</strong><br><em>Current Details, Hourly, Daily</em>
+    </td>
+    <td align="center">
+      <img src="./assets/screenshots/week_details.png" alt="Week Details" width="auto"><br>
+      <strong>Week Details</strong><br><em>Sunrise/Sunset, 3-Hour Snapshot</em>
+    </td>
+  </tr>
+</table>
+
+<a id="emoji-view"></a>
+
+<h3 align="center">Emojis</h3>
+
 <table>
   <tr>
     <td align="center">
@@ -137,8 +160,8 @@ Features a tooltip with multiple modes that can be cycled through to view more w
        "freezing_rain": "#00CED1", // 🌧️❄️
        "snow": "#87CEEB", // 🌨️
        "heavy_snow": "#B0E0E6", // ❄️
-       "thunderstorm": "#9370DB" // ⛈️
-     }
+       "thunderstorm": "#9370DB", // ⛈️
+     },
    }
    ```
 
