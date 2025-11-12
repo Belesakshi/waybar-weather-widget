@@ -57,18 +57,50 @@ module Utils
       default
     end
 
-    # Formats a Time/DateTime object into a 2-digit hour (e.g., "08", "23").
+    # Formats a Time/DateTime object into a formatted hour string.
     #
     # @param datetime [Time] The Time or DateTime object to format.
     # @param time_format [String, nil] Optional time format override ('24h' for military, '12h' for AM/PM).
     #   If nil, uses Config.time_format.
+    # @param hour_display [String, nil] Optional hour display mode ('icons', 'number', 'both').
+    #   If nil, uses Config.hour_display.
     # @return [String] Formatted hour string.
-    def fmt_hour(datetime, time_format = nil)
+    def fmt_hour(datetime, time_format = nil, hour_display = nil)
       format = time_format || Config.time_format
-      if format == '12h'
-        datetime.strftime('%I %P') # e.g., "03 pm", "12 am"
-      else
-        datetime.strftime('%H') # e.g., "03", "15"
+      display_mode = hour_display || Config.hour_display
+
+      # Get the number representation
+      number_str = if format == '12h'
+                     datetime.strftime('%I %P') # e.g., "03 pm", "12 am"
+                   else
+                     datetime.strftime('%H') # e.g., "03", "15"
+                   end
+
+      # Get the icon representation
+      icon_str = Icons.get_clock_icon(datetime.hour)
+
+      # Return based on display mode
+      case display_mode
+      when 'icons'
+        if icon_str
+          # Icons mode: icon + am/pm only (clock face shows the hour)
+          # Style the icon with primary color (remove the trailing space from style_icon)
+          styled_icon = Icons.style_icon(icon_str, Config.colors['primary'], Config.pongo_size[:small]).rstrip
+          am_pm = datetime.strftime('%P')
+          "#{styled_icon} #{am_pm}"
+        else
+          number_str
+        end
+      when 'both'
+        # Icon + fully formatted hour string (respects time_format)
+        if icon_str
+          styled_icon = Icons.style_icon(icon_str, Config.colors['primary'], Config.pongo_size[:small]).rstrip
+          "#{styled_icon} #{number_str}"
+        else
+          number_str
+        end
+      else # 'number' or any other value
+        number_str
       end
     end
 
@@ -105,6 +137,7 @@ module Config
     longitude: 'auto', # or float
     refresh_interval: 900, # seconds between API calls
     time_format: '24h', # '24h' or '12h'
+    hour_display: 'number', # 'icons' | 'number' | 'both'
     pongo_size: {}
   }
 
@@ -118,7 +151,8 @@ module Config
     'latitude' => :latitude,
     'longitude' => :longitude,
     'refresh_interval' => :refresh_interval,
-    'time_format' => :time_format
+    'time_format' => :time_format,
+    'hour_display' => :hour_display
   }.freeze
 
   class << self
@@ -160,6 +194,10 @@ module Config
 
     def time_format
       @settings[:time_format]
+    end
+
+    def hour_display
+      @settings[:hour_display]
     end
 
     def unit_c?
@@ -218,6 +256,13 @@ module Icons
     def get_ui(key)
       keys = key.split('.')
       keys.reduce(@ui_icons) { |acc, k| acc&.[](k) }
+    end
+
+    def get_clock_icon(hour)
+      # Map hour (0-23) to clock face (1-12)
+      clock_hour = hour % 12
+      clock_hour = 12 if clock_hour == 0
+      get_ui("hour.#{clock_hour}")
     end
 
     def weather_icon(code, is_day)
@@ -801,7 +846,28 @@ module TooltipBuilder
       }
     end
 
-    # --- NEW: This method's ONLY job is to build the waybar text ---
+    # Calculates the appropriate column width for the hour column based on display settings.
+    #
+    # @return [Integer] Column width in characters
+    def calculate_hour_column_width
+      hour_display = Config.hour_display
+      time_format = Config.time_format
+      icon_type = Config.icon_type
+
+      case hour_display
+      when 'icons'
+        icon_width = icon_type == 'emoji' ? 3 : 2
+        icon_width + 3
+      when 'both'
+        icon_width = icon_type == 'emoji' ? 3 : 2
+        number_width = time_format == '12h' ? 6 : 3
+        icon_width + number_width
+      else
+        time_format == '12h' ? 6 : 3
+      end
+    end
+
+    # Build the waybar text
     def build_text(cond:, temp:, code:, is_day:, icon_pos:, fallback_icon:)
       # icon for current condition
       cond_icon_raw = Icons.weather_icon(code, is_day != 0) || fallback_icon
@@ -869,7 +935,7 @@ module TooltipBuilder
 
     # Builds hourly forecast table
     def make_hour_table(next_hours)
-      hr_col_width = Config.time_format == '12h' ? 6 : 4
+      hr_col_width = calculate_hour_column_width
       hour_table_header_text = format(
         "%<hr>-#{hr_col_width}s │ %<temp>5s │ %<pop>4s │ %<precip>7s │ Cond",
         hr: 'Hr', temp: 'Temp', pop: 'PoP', precip: 'Precip'
@@ -937,7 +1003,7 @@ module TooltipBuilder
 
     # Builds 3-hour interval forecast table
     def make_3h_table(rows)
-      hr_col_width = Config.time_format == '12h' ? 6 : 4
+      hr_col_width = calculate_hour_column_width
       detail3h_header_text = format(
         "%-<date>9s │ %<hr>#{hr_col_width}s │ %<temp>5s │ %<pop>4s │ %<precip>7s │ Cond",
         date: 'Date', hr: 'Hr', temp: 'Temp', pop: 'PoP', precip: 'Precip'
