@@ -138,6 +138,8 @@ module Config
     refresh_interval: 900, # seconds between API calls
     time_format: '24h', # '24h' or '12h'
     hour_display: 'number', # 'icons' | 'number' | 'both'
+    color_weather_icons: false, # enable weather-specific icon colors
+    weather_colors: {}, # weather-specific icon colors
     pongo_size: {}
   }
 
@@ -164,6 +166,16 @@ module Config
       # Merge colors settings
       if user_config.key?('colors') && user_config['colors'].is_a?(Hash)
         @settings[:colors].merge!(user_config['colors'])
+      end
+
+      # Merge weather_colors settings
+      if user_config.key?('weather_colors') && user_config['weather_colors'].is_a?(Hash)
+        @settings[:weather_colors].merge!(user_config['weather_colors'])
+      end
+
+      # Load color_weather_icons boolean
+      if user_config.key?('color_weather_icons')
+        @settings[:color_weather_icons] = user_config['color_weather_icons']
       end
 
       # Handle font size calculations
@@ -279,6 +291,55 @@ module Icons
       end
 
       ''
+    end
+
+    def weather_color(code, is_day)
+      # Return primary color if weather icon coloring is disabled
+      return Config.colors['primary'] unless Config.settings[:color_weather_icons]
+
+      # Map WMO codes to weather color keys
+      code = code.to_i
+      color_key = case code
+                  when 0, 1
+                    is_day ? 'clear_day' : 'clear_night'
+                  when 2
+                    is_day ? 'partly_cloudy_day' : 'partly_cloudy_night'
+                  when 3
+                    'overcast'
+                  when 45, 48
+                    'fog'
+                  when 51, 53
+                    'drizzle'
+                  when 55, 56
+                    'drizzle'
+                  when 57
+                    'freezing_rain'
+                  when 61
+                    'rain'
+                  when 63
+                    'rain'
+                  when 65, 82
+                    'heavy_rain'
+                  when 66, 67
+                    'freezing_rain'
+                  when 71, 73
+                    'snow'
+                  when 75, 77
+                    'heavy_snow'
+                  when 80, 81
+                    'rain'
+                  when 85
+                    'snow'
+                  when 86
+                    'heavy_snow'
+                  when 95, 96, 99
+                    'thunderstorm'
+                  else
+                    nil
+                  end
+
+      # Return the color or fall back to primary
+      color_key ? Config.settings[:weather_colors][color_key] || Config.colors['primary'] : Config.colors['primary']
     end
 
     def style_icon(glyph, color = Config.colors['primary'], size = Config.pongo_size[:medium])
@@ -873,7 +934,7 @@ module TooltipBuilder
       cond_icon_raw = Icons.weather_icon(code, is_day != 0) || fallback_icon
 
       # main text with waybar icon
-      waybar_icon = Icons.style_icon(cond_icon_raw, Config.colors['primary'], Config.pongo_size[:small])
+      waybar_icon = Icons.style_icon(cond_icon_raw, Icons.weather_color(code, is_day != 0), Config.pongo_size[:small])
       left = "#{waybar_icon}#{temp.round}#{Config.unit}"
       right = "#{temp.round}#{Config.unit} #{waybar_icon}"
       (icon_pos || 'left') == 'left' ? left : right
@@ -953,7 +1014,7 @@ module TooltipBuilder
         precip_col = format('%<val>.1f %<unit>s', val: h['precip'], unit: Config.precip_unit).rjust(7)
 
         glyph = Icons.weather_icon(h['code'], h['is_day'] != 0)
-        icon_html = glyph.empty? ? '' : Icons.style_icon(glyph, Config.colors['primary'], Config.pongo_size[:small])
+        icon_html = glyph.empty? ? '' : Icons.style_icon(glyph, Icons.weather_color(h['code'], h['is_day'] != 0), Config.pongo_size[:small])
         cond_cell = "#{icon_html} #{CGI.escapeHTML(h['cond'].to_s)}".strip
 
         rows << format("%-#{hr_col_width}s │ %s │ %s │ %s │ %s",
@@ -988,7 +1049,7 @@ module TooltipBuilder
 
         cond_txt = d['cond'].to_s
         glyph = Icons.weather_icon(d['code'], true)
-        icon_html = glyph.empty? ? '' : Icons.style_icon(glyph, Config.colors['primary'], Config.pongo_size[:small])
+        icon_html = glyph.empty? ? '' : Icons.style_icon(glyph, Icons.weather_color(d['code'], true), Config.pongo_size[:small])
         cond_cell = "#{icon_html} #{CGI.escapeHTML(cond_txt)}".strip
 
         row = format('%-9s │ %s │ %s │ %s │ %s │ %s',
@@ -1022,7 +1083,7 @@ module TooltipBuilder
         precip_col = format('%<val>.1f %<unit>s', val: r['precip'], unit: Config.precip_unit).rjust(7)
 
         glyph = Icons.weather_icon(r['code'], r['is_day'] != 0)
-        icon_html = glyph.empty? ? '' : Icons.style_icon(glyph, Config.colors['primary'], Config.pongo_size[:small])
+        icon_html = glyph.empty? ? '' : Icons.style_icon(glyph, Icons.weather_color(r['code'], r['is_day'] != 0), Config.pongo_size[:small])
         cond_cell = "#{icon_html} #{CGI.escapeHTML(r['cond'].to_s)}".strip
 
         out << format("%-9s │ %#{hr_col_width}s │ %s │ %s │ %s │ %s",
@@ -1044,7 +1105,7 @@ module TooltipBuilder
       # current conditions + colored thermometer
       tglyph, tcolor = Temperature.glyph_and_color(feels)
       current_line = format('%s %s | %s%d%s (feels %d%s)',
-                            Icons.style_icon(Icons.weather_icon(code, is_day != 0) || fallback_icon),
+                            Icons.style_icon(Icons.weather_icon(code, is_day != 0) || fallback_icon, Icons.weather_color(code, is_day != 0)),
                             CGI.escapeHTML(cond),
                             Icons.style_icon(tglyph, tcolor),
                             temp.round,
