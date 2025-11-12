@@ -31,6 +31,7 @@ It provides current weather, hourly forecasts, and a multi-day forecast with a c
 - **Customizable:**
   - Supports both Celsius and Fahrenheit.
   - Supports both 12-hour (AM/PM) and 24-hour time formats.
+  - Configurable hour display: as icons, numbers, or both.
   - Uses Nerd Font icons or emoji for weather conditions.
   - All colors are customizable.
   - You can change the number of hours and days to forecast.
@@ -103,6 +104,7 @@ Features a tooltip with multiple modes that can be cycled through to view more w
      "refresh_interval": 900, // Seconds between API calls (e.g., 900 = 15 min)
      "unit": "Fahrenheit", // "Fahrenheit" or "Celsius"
      "time_format": "24h", // "24h" or "12h"
+     "hour_display": "number", // "icons", "number", or "both"
      "icon_type": "nerd", // "nerd" or "emoji"
      "icon_position": "left", // "left" or "right"
      "font_size": 14, // Base font size for icons (in px)
