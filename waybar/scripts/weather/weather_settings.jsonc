@@ -26,9 +26,9 @@
   "color_weather_icons": true,            // Enable weather-specific icon colors for nerd fonts (false = use primary color)
   "weather_colors": {
     "clear_day": "#FFAC33",               // ☀️
-    "clear_night": "#FAC629",             // 🌙
+    "clear_night": "#5B6FD3",             // 🌙
     "partly_cloudy_day": "#D89C4C",       // ⛅
-    "partly_cloudy_night": "#A88E3A",     // ☁️
+    "partly_cloudy_night": "#4554A8",     // ☁️
     "overcast": "#B0B0B0",                // ☁️
     "fog": "#D3D3D3",                     // 🌫️
     "drizzle": "#87CEEB",                 // 💧
