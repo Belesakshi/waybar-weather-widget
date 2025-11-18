@@ -17,7 +17,7 @@ A <strong>detailed and customizable</strong> weather widget for Waybar, powered 
 
 </p>
 
-https://github.com/user-attachments/assets/b2800359-730d-4a34-b532-4cf208d1c966
+https://github.com/user-attachments/assets/1808f67f-fed6-4acc-b7cc-393a75918aa2
 
 ## ✨ Features
 
