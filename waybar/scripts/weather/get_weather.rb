@@ -498,6 +498,111 @@ module Precipitation
   end
 end
 
+# Parses Moon phase into description, icons, and emoji
+module MoonPhase
+  KNOWN_NEW_MOON = Time.utc(2000, 1, 6, 18, 14, 0)
+  LUNAR_CYCLE = 29.530588861 # Lunar cycle length in days
+
+  class << self
+    # Calculates moon phase for a given date
+    # @param date [Time, String] Date to calculate phase for
+    # @return [Float] Moon phase value (0-1 scale)
+    def calculate_phase(date)
+      date = Time.parse(date.to_s) unless date.is_a?(Time)
+      days_since = (date - KNOWN_NEW_MOON) / 86_400.0
+
+      # Calculate phase (0-1 scale)
+      phase = (days_since % LUNAR_CYCLE) / LUNAR_CYCLE
+
+      phase % 1.0
+    end
+
+    # Converts moon phase value (0-1) to phase name
+    # @param phase [Float] Moon phase from API (0-1 scale)
+    # @return [String] Phase name
+    def phase_name(phase)
+      return 'Unknown' if phase.nil?
+
+      phase = phase.to_f
+
+      case phase
+      when 0.0...0.0625, 0.9375..1.0
+        'New Moon'
+      when 0.0625...0.1875
+        'Waxing Crescent'
+      when 0.1875...0.3125
+        'First Quarter'
+      when 0.3125...0.4375
+        'Waxing Gibbous'
+      when 0.4375...0.5625
+        'Full Moon'
+      when 0.5625...0.6875
+        'Waning Gibbous'
+      when 0.6875...0.8125
+        'Last Quarter'
+      when 0.8125...0.9375
+        'Waning Crescent'
+      else
+        'Unknown'
+      end
+    end
+
+    # Gets moon phase icon key for ui_icons lookup
+    # @param phase [Float] Moon phase from API (0-1 scale)
+    # @return [String] Icon key for Icons.get_ui lookup
+    def icon_key(phase)
+      return 'moon.new' if phase.nil?
+
+      phase = phase.to_f
+
+      case phase
+      when 0.0...0.0625, 0.9375..1.0
+        'moon.new'
+      when 0.0625...0.1875
+        'moon.waxing_crescent'
+      when 0.1875...0.3125
+        'moon.first_quarter'
+      when 0.3125...0.4375
+        'moon.waxing_gibbous'
+      when 0.4375...0.5625
+        'moon.full'
+      when 0.5625...0.6875
+        'moon.waning_gibbous'
+      when 0.6875...0.8125
+        'moon.last_quarter'
+      when 0.8125...0.9375
+        'moon.waning_crescent'
+      else
+        'moon.new'
+      end
+    end
+
+    # Gets moon phase icon with styling
+    # @param phase [Float] Moon phase from API (0-1 scale)
+    # @param color [String] Optional color override
+    # @param size [Integer] Optional size override
+    # @return [String] Styled icon HTML
+    def icon(phase, color = nil, size = nil)
+      key = icon_key(phase)
+      glyph = Icons.get_ui(key)
+      color ||= Config.settings[:weather_colors]['clear_night'] || Config.colors['primary']
+      size ||= Config.pongo_size[:small]
+      Icons.style_icon(glyph, color, size)
+    end
+
+    # Formats moon phase as percentage with description
+    # @param phase [Float] Moon phase from API (0-1 scale)
+    # @return [String] Formatted string like "50% (Full Moon)"
+    def format_phase(phase)
+      return 'N/A' if phase.nil?
+
+      percentage = (phase.to_f * 100).round
+      name = phase_name(phase)
+      "#{percentage}% (#{name})"
+    end
+  end
+end
+
 # Handles mode toggles to view different weather tooltips.
 # Stores the current mode in XDG_STATE_HOME/waybar/weather_mode.
 module WeatherMode
@@ -795,7 +900,8 @@ module ForecastData
           'precip' => Utils.parse_float(precips[i]),
           'pop' => Utils.parse_int(pops[i]),
           'sunrise' => sunrises[i],
-          'sunset' => sunsets[i]
+          'sunset' => sunsets[i],
+          'moon_phase' => MoonPhase.calculate_phase(date_str)
         }
       end
 
@@ -858,6 +964,17 @@ module ForecastData
       out
     end
 
+    # Builds a lookup hash mapping dates to moon_phase values
+    def build_moon_by_date(days)
+      # Map 'YYYY-MM-DD' -> moon_phase (0-1 float)
+      out = {}
+      days.each do |d|
+        date_str = d['date']
+        out[date_str] = d['moon_phase']
+      end
+      out
+    end
+
     # Gets today's sunrise and sunset times
     def get_sun_times(days, now_local)
       today = now_local.strftime('%Y-%m-%d')
@@ -869,6 +986,15 @@ module ForecastData
         return [sr, ss]
       end
       ['', '']
+    end
+
+    # Gets today's moon phase
+    def get_moon_phase_today(days, now_local)
+      today = now_local.strftime('%Y-%m-%d')
+      days.each do |d|
+        return d['moon_phase'] if d['date'] == today
+      end
+      nil
     end
   end
 end
@@ -885,8 +1011,8 @@ module TooltipBuilder
   )
 
   ASTRO3D_HEADER_TEXT = format(
-    '%-<date>9s │ %<rise>5s │ %<set>5s │ %<day>7s │ %<night>8s',
-    date: 'Date', rise: 'Rise', set: 'Set', day: 'Day L.', night: 'Night L.'
+    '%-<date>9s │ %<rise>5s │ %<set>5s │ %<day>7s │ %<night>8s │ %<moon>10s',
+    date: 'Date', rise: 'Rise', set: 'Set', day: 'Day L.', night: 'Night L.', moon: 'Moon Phase'
   )
 
   class << self
@@ -929,7 +1055,7 @@ module TooltipBuilder
 
     def build_text_and_tooltip(timezone:, cond:, temp:, feels:, precip_amt:, code:, is_day:, next_hours:,
                                days:, icon_pos:, fallback_icon:,
-                               sunrise:, sunset:, location_name: nil, daily_number_of_days: 16)
+                               sunrise:, sunset:, moon_phase: nil, location_name: nil, daily_number_of_days: 16)
       text = build_waybar_status(
         cond: cond, temp: temp, code: code, is_day: is_day,
         icon_pos: icon_pos, fallback_icon: fallback_icon
@@ -941,7 +1067,7 @@ module TooltipBuilder
       header_block = build_header_block(
         timezone: timezone, cond: cond, temp: temp, feels: feels,
         code: code, is_day: is_day, fallback_icon: fallback_icon,
-        sunrise: sunrise, sunset: sunset,
+        sunrise: sunrise, sunset: sunset, moon_phase: moon_phase,
         now_pop: next_hours.empty? ? nil : next_hours[0]['pop'].to_i,
         precip_amt: precip_amt, location_name: location_name
       )
@@ -962,7 +1088,7 @@ module TooltipBuilder
     end
 
     # Builds a compact table for sunrise/sunset for the dates present in rows
-    def make_astro3d_table(rows, astro_by_date, max_days = nil)
+    def make_astro3d_table(rows, astro_by_date, moon_by_date = {}, max_days = nil)
       header = "<span weight='bold'>#{ASTRO3D_HEADER_TEXT}</span>"
       # If max_days is specified, use all dates from astro_by_date instead of just from rows
       dates = if max_days
@@ -977,7 +1103,17 @@ module TooltipBuilder
 
         day_len, night_len = calculate_day_night_length(astro_by_date.fetch(date, ['', '']))
 
-        format('%-9s │ %5s │ %5s │ %7s │ %8s', Utils.fmt_day_of_week(date), sunrise, sunset, day_len, night_len)
+        # Add moon phase lookup
+        moon_phase = moon_by_date.fetch(date, nil)
+        moon_display = if moon_phase
+                         moon_icon = MoonPhase.icon(moon_phase)
+                         "#{moon_icon} #{MoonPhase.phase_name(moon_phase)}"
+                       else
+                         '—'
+                       end
+
+        format('%-9s │ %5s │ %5s │ %7s │ %8s │ %s',
+               Utils.fmt_day_of_week(date), sunrise, sunset, day_len, night_len, moon_display)
       end
 
       return 'No sunrise/sunset data' if lines.empty?
@@ -1128,7 +1264,7 @@ module TooltipBuilder
 
     # Builds the common header block for tooltips
     def build_header_block(timezone:, cond:, temp:, feels:, code:, is_day:, fallback_icon:,
-                           sunrise: nil, sunset: nil, now_pop: nil, precip_amt: nil, location_name: nil)
+                           sunrise: nil, sunset: nil, moon_phase: nil, now_pop: nil, precip_amt: nil, location_name: nil)
       display_location = location_name || timezone || 'Local'
       location_line = format('<b>%s</b>', CGI.escapeHTML(display_location))
       tglyph, tcolor = Temperature.glyph_and_color(feels)
@@ -1152,6 +1288,14 @@ module TooltipBuilder
                             CGI.escapeHTML(sunset || '—'))
       end
 
+      # optional moon phase
+      moon_line = ''
+      if moon_phase
+        moon_line = format('%s Moon Phase: %s',
+                           MoonPhase.icon(moon_phase),
+                           CGI.escapeHTML(MoonPhase.format_phase(moon_phase)))
+      end
+
       # optional "now" precip / PoP (colored)
       now_line = ''
       if now_pop && precip_amt
@@ -1163,6 +1307,7 @@ module TooltipBuilder
 
       parts = [location_line, '', current_line]
       parts << astro_line unless astro_line.empty?
+      parts << moon_line unless moon_line.empty?
       parts << now_line unless now_line.empty?
       parts << "\n#{divider}\n"
       parts.join("\n")
@@ -1170,19 +1315,22 @@ module TooltipBuilder
 
     # Builds week view tooltip with detailed 3-hour forecast
     def build_week_view_tooltip(timezone:, cond:, temp:, feels:, code:, is_day:, fallback_icon:,
-                                three_hour_rows:, sunrise: nil, sunset: nil,
-                                now_pop: nil, precip_amt: nil, astro_by_date: nil, location_name: nil,
-                                max_astro_days: nil, snapshot_days: nil)
+                                three_hour_rows:, sunrise: nil, sunset: nil, moon_phase: nil,
+                                now_pop: nil, precip_amt: nil, astro_by_date: nil, moon_by_date: nil,
+                                location_name: nil, max_astro_days: nil, snapshot_days: nil)
       header_block = build_header_block(
         timezone: timezone, cond: cond, temp: temp, feels: feels,
         code: code, is_day: is_day, fallback_icon: fallback_icon,
-        sunrise: sunrise, sunset: sunset, now_pop: now_pop,
+        sunrise: sunrise, sunset: sunset, moon_phase: moon_phase, now_pop: now_pop,
         precip_amt: precip_amt, location_name: location_name
       )
 
-      astro_table = make_astro3d_table(three_hour_rows, astro_by_date || {}, max_astro_days)
+      astro_table = make_astro3d_table(three_hour_rows, astro_by_date || {}, moon_by_date || {}, max_astro_days)
       astro_header = "<b>#{Icons.style_icon(Icons.get_ui('sun.rise'), Config.colors['primary'],
-                                            Config.pongo_size[:small])} Sunrise / Sunset</b>"
+                                            Config.pongo_size[:small])} " \
+                     'Sunrise / Sunset &amp; ' \
+                     "#{Icons.style_icon(Icons.get_ui('moon.night'), Config.colors['primary'],
+                                         Config.pongo_size[:small])} Moon Phases</b>"
 
       snapshot_label = snapshot_days ? "Next #{snapshot_days} Day(s) Snapshot" : 'Snapshot'
       detail_header = "<b>#{Icons.style_icon(Icons.get_ui('calendar'), Config.colors['primary'],
@@ -1225,6 +1373,7 @@ module DefaultViewBuilder
       next_hours = weather_data[:next_hours]
       sunrise = weather_data[:sunrise]
       sunset = weather_data[:sunset]
+      moon_phase = weather_data[:moon_phase]
       fallback_icon = weather_data[:fallback_icon]
 
       TooltipBuilder.build_text_and_tooltip(
@@ -1232,7 +1381,7 @@ module DefaultViewBuilder
         precip_amt: cur['precip_amt'], code: cur['code'], is_day: cur['is_day'], next_hours: next_hours,
         days: days,
         icon_pos: settings[:icon_position], fallback_icon: fallback_icon, sunrise: sunrise, sunset: sunset,
-        location_name: cur['location_name'], daily_number_of_days: settings[:daily_number_of_days]
+        moon_phase: moon_phase, location_name: cur['location_name'], daily_number_of_days: settings[:daily_number_of_days]
       )
     end
   end
@@ -1251,12 +1400,14 @@ module WeekViewBuilder
       next_hours = weather_data[:next_hours]
       sunrise = weather_data[:sunrise]
       sunset = weather_data[:sunset]
+      moon_phase = weather_data[:moon_phase]
       fallback_icon = weather_data[:fallback_icon]
       blob = weather_data[:blob]
       days = weather_data[:days]
 
       snapshot_days = ForecastData.build_next_3days_detailed(blob, cur['now_local'], settings[:snapshot_number_of_days])
       astro_by_date = ForecastData.build_astro_by_date(days)
+      moon_by_date = ForecastData.build_moon_by_date(days)
 
       text = TooltipBuilder.build_waybar_status(
         cond: cur['cond'], temp: cur['temp'], code: cur['code'], is_day: cur['is_day'],
@@ -1267,9 +1418,10 @@ module WeekViewBuilder
         timezone: cur['timezone'], cond: cur['cond'], temp: cur['temp'], feels: cur['feels'],
         code: cur['code'], is_day: cur['is_day'], fallback_icon: fallback_icon,
         three_hour_rows: snapshot_days,
-        sunrise: sunrise, sunset: sunset,
+        sunrise: sunrise, sunset: sunset, moon_phase: moon_phase,
         now_pop: next_hours.empty? ? nil : next_hours[0]['pop'].to_i,
         precip_amt: cur['precip_amt'], astro_by_date: astro_by_date,
+        moon_by_date: moon_by_date,
         location_name: cur['location_name'],
         max_astro_days: settings[:daily_number_of_days],
         snapshot_days: settings[:snapshot_number_of_days]
@@ -1361,10 +1513,11 @@ private def fetch_weather_data(lat, lon, settings, location_name)
   days = ForecastData.build_next_days(blob, settings[:daily_number_of_days])
   next_hours = ForecastData.build_next_hours(blob, cur['now_local'], settings[:hourly_number_of_hours])
   sunrise, sunset = ForecastData.get_sun_times(days, cur['now_local'])
+  moon_phase = ForecastData.get_moon_phase_today(days, cur['now_local'])
   fallback_icon = Icons.weather_icon(cur['code'], cur['is_day'] != 0) || ''
 
   { blob: blob, cur: cur, days: days, next_hours: next_hours, sunrise: sunrise, sunset: sunset,
-    fallback_icon: fallback_icon }
+    moon_phase: moon_phase, fallback_icon: fallback_icon }
 end
 
 # Generate text and tooltip based on mode
