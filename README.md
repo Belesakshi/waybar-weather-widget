@@ -17,35 +17,39 @@ A <strong>detailed and customizable</strong> weather widget for Waybar, powered 
 
 </p>
 
-https://github.com/user-attachments/assets/1808f67f-fed6-4acc-b7cc-393a75918aa2
+<https://github.com/user-attachments/assets/1808f67f-fed6-4acc-b7cc-393a75918aa2>
 
 ## ✨ Features
 
-It provides current weather, hourly forecasts, and a multi-day forecast with a clean, icon-based display.
+The only weather widget you'll ever need. Feature rich, customizable, and clean with multiple tooltips.
 
 - **Current Weather:** Displays the current temperature and a weather icon for current conditions.
 - **Geolocation:** Automatically detects your location via your IP address, or you can set a manual latitude/longitude.
+- **Dynamic Icons:** Weather icons change for day and night.
 - **Detailed Tooltips:**
-  - **Default View:** Shows current details, an hourly forecast (default 12 hours, max 24), and a multi-day forecast (up to 16 days).
-  - **Week View:** Shows a detailed 3-hour interval forecast for the next few days, including sunrise/sunset times with day/night length, the current moon phase, and a snapshot of the next few days (default 2, max 3).
+  - **Default View:**
+    - Current weather details
+    - Hourly forecast (default 12 hours, max 24)
+    - Multi-day forecast (up to 16 days).
+  - **Week View:**:
+    - Sunrise/sunset times with day/night length
+    - Moon phases
+    - A snapshot of the next few days via 3-hour intervals (default 2 days, max 3)
 - **Customizable:**
-  - Supports both Celsius and Fahrenheit.
-  - Supports both 12-hour (AM/PM) and 24-hour time formats.
-  - Configurable hour display: as icons, numbers, or both.
-  - Uses Nerd Font icons or emoji for weather conditions.
+  - Celsius or Fahrenheit
+  - 12-hour (AM/PM) or 24-hour time format
+  - Change hour display: icons, numbers, or both.
+  - Use Emojis or Nerd Font icons for UI and weather conditions.
+  - Customize total hours and days for each forecast type.
   - All colors are customizable.
   - Weather-specific icon coloring for Nerd Fonts.
-  - You can change the number of hours and days to forecast, and the number of days in the week view snapshot.
-- **Dynamic Icons:** Weather icons change for day and night.
 - **Moon Phase:** Displays the current moon phase icon in the `weekview` tooltip.
 - **Day/Night Length:** Shows the duration of day and night in the `weekview` tooltip.
 - **Command-line Interface:** A simple CLI to toggle between tooltip views.
 
 ## 📸 Screenshots
 
-Features a tooltip with multiple modes that can be cycled through to view more weather data.
-
-In addition, you can use [nerd fonts](#nerd-font-view) or [emojis](#emoji-view) and customize all the colors!
+Features a tooltip with multiple modes that can be cycled through via click to view more weather data.
 
 <a id="nerd-font-view"></a>
 
@@ -147,7 +151,7 @@ In addition, you can use [nerd fonts](#nerd-font-view) or [emojis](#emoji-view) 
        "pop_med": "#CFA7FF", // Precipitation medium
        "pop_high": "#BC85FF", // Precipitation high
        "pop_vhigh": "#A855F7", // Precipitation very high
-       "divider": "#2B3B57" // Divider color
+       "divider": "#2B3B57", // Divider color
      },
      "color_weather_icons": true, // Enable weather-specific icon colors for nerd fonts (false = use primary color)
      "weather_colors": {
@@ -163,8 +167,8 @@ In addition, you can use [nerd fonts](#nerd-font-view) or [emojis](#emoji-view) 
        "freezing_rain": "#00CED1", // 🌧️❄️
        "snow": "#87CEEB", // 🌨️
        "heavy_snow": "#B0E0E6", // ❄️
-       "thunderstorm": "#9370DB" // ⛈️
-     }
+       "thunderstorm": "#9370DB", // ⛈️
+     },
    }
    ```
 
@@ -189,7 +193,7 @@ You can also manually set the view from your terminal:
 
 ## 📦 Dependencies
 
-- **Ruby:** The script is written in Ruby and uses standard libraries.
+- **Ruby:** The script is written in standard Ruby with no external dependencies.
 - **Nerd Font:** A Nerd Font is required to display the weather icons correctly. You can download one from [nerdfonts.com](https://www.nerdfonts.com/).
 
 ## 🙏 Credits
