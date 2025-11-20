@@ -39,8 +39,8 @@
     "code": 45,
     "day": "Fog",
     "night": "Fog",
-    "icon-nerd": "",
-    "icon-nerd-night": "",
+    "icon-nerd": "󰖑",
+    "icon-nerd-night": "󰖑",
     "icon-emoji": "🌫️",
     "icon-emoji-night": "🌫️"
   },
@@ -49,7 +49,7 @@
     "day": "Depositing rime fog",
     "night": "Depositing rime fog",
     "icon-nerd": "",
-    "icon-nerd-night": "",
+    "icon-nerd-night": "󰖑",
     "icon-emoji": "🌫️",
     "icon-emoji-night": "🌫️"
   },
