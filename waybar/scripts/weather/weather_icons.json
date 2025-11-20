@@ -120,8 +120,8 @@
     "code": 65,
     "day": "Heavy rain",
     "night": "Heavy rain",
-    "icon-nerd": "",
-    "icon-nerd-night": "",
+    "icon-nerd": "󰖖",
+    "icon-nerd-night": "󰖖",
     "icon-emoji": "💦",
     "icon-emoji-night": "💦"
   },
